@@ -43,6 +43,7 @@ dependencies {
     implementation(projects.feature.todo)
     implementation(projects.feature.calendar)
     implementation(projects.feature.messagecenter)
+    implementation(projects.feature.dhl)
 
     implementation(projects.core.model)
     implementation(projects.core.network)
@@ -60,6 +61,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.hilt.work)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.kotlinx.serialization.json)
 

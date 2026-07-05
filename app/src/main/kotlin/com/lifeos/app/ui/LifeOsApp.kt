@@ -29,6 +29,7 @@ import com.lifeos.feature.calendar.CalendarRoute
 import com.lifeos.feature.capture.LoggerRoute
 import com.lifeos.feature.capture.QuickCaptureSheet
 import com.lifeos.feature.chat.ChatRoute
+import com.lifeos.feature.dhl.PackagesRoute
 import com.lifeos.feature.messagecenter.InboxRoute
 import com.lifeos.feature.notes.NotesRoute
 
@@ -100,6 +101,9 @@ fun LifeOsApp() {
             }
             composable<LifeDestination.Logger> {
                 LoggerRoute()
+            }
+            composable<LifeDestination.Packages> {
+                PackagesRoute()
             }
         }
     }

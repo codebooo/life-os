@@ -9,14 +9,13 @@ import java.util.Collections
 import javax.inject.Inject
 
 /**
- * Phase 4's end-to-end proof rule — R1's precursor: a shipment tracking
- * number spotted in any notification or capture becomes a provenance-tagged
- * task. Phase 5 upgrades the target to a real package entity + delivery
- * reminder.
+ * Rule R1 (§3): a shipment tracking number spotted in any notification or
+ * capture starts a tracked package (which sets its own delivery reminder
+ * once DHL reports an estimate).
  */
 class TrackingNumberRule @Inject constructor() : CrossModuleRule {
 
-    override val id: String = "tracking-number-to-task"
+    override val id: String = "tracking-number-to-package"
 
     private val seen = Collections.synchronizedSet(mutableSetOf<String>())
 
@@ -26,12 +25,7 @@ class TrackingNumberRule @Inject constructor() : CrossModuleRule {
         val (text, source) = textOf(event) ?: return emptyList()
         return extractTrackingNumbers(text)
             .filter { seen.add(it) } // idempotent: each number acts once per process
-            .map { number ->
-                LifeAction.CreateTask(
-                    title = "Track package $number",
-                    source = source,
-                )
-            }
+            .map { number -> LifeAction.TrackPackage(trackingNumber = number, source = source) }
     }
 
     private fun textOf(event: LifeEvent): Pair<String, SourceRef>? = when (event) {

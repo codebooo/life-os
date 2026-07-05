@@ -23,8 +23,8 @@ class TrackingNumberRuleTest {
         val actions = rule.produce(event)
 
         assertEquals(1, actions.size)
-        val task = actions.first() as LifeAction.CreateTask
-        assertTrue(task.title.contains("00340434161094042557"))
+        val track = actions.first() as LifeAction.TrackPackage
+        assertEquals("00340434161094042557", track.trackingNumber)
     }
 
     @Test

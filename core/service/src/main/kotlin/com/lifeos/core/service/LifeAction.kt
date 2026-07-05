@@ -31,4 +31,10 @@ sealed interface LifeAction {
         val at: Long,
         override val source: SourceRef,
     ) : LifeAction
+
+    /** R1: start tracking a shipment (creates the package + delivery reminder). */
+    data class TrackPackage(
+        val trackingNumber: String,
+        override val source: SourceRef,
+    ) : LifeAction
 }
