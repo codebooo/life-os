@@ -45,6 +45,12 @@ interface CaptureRepository {
     /** Persists the capture and returns the routing suggestion (R12). */
     suspend fun submitQuick(text: String): LifeResult<PendingCapture>
 
+    /** Brain-dump ([src 16], R10): persist raw stream, return split items for review. */
+    suspend fun submitBrainDump(text: String): LifeResult<Pair<Long, List<DumpItem>>>
+
+    /** Writes one confirmed brain-dump item. */
+    suspend fun confirmDumpItem(captureId: Long, item: DumpItem): LifeResult<Unit>
+
     /** Executes the (possibly user-adjusted) destination for a pending capture. */
     suspend fun confirm(pending: PendingCapture, destination: CaptureDestination): LifeResult<Unit>
 
@@ -65,6 +71,7 @@ data class LogFieldSpec(
 internal class DefaultCaptureRepository @Inject constructor(
     private val captureDao: CaptureDao,
     private val classifier: CaptureClassifier,
+    private val brainDumpOrganizer: BrainDumpOrganizer,
     private val actionDispatcher: LifeActionDispatcher,
     private val eventBus: LifeEventBus,
     private val dispatchers: DispatcherProvider,
@@ -99,6 +106,35 @@ internal class DefaultCaptureRepository @Inject constructor(
                 )
             }
         }
+
+    override suspend fun submitBrainDump(text: String): LifeResult<Pair<Long, List<DumpItem>>> =
+        withContext(dispatchers.io) {
+            runCatchingLife {
+                val captureId = captureDao.insertCapture(
+                    CaptureEntity(
+                        kind = CaptureKind.BRAIN_DUMP.name,
+                        text = text,
+                        blobVaultRef = null,
+                        routedTo = null,
+                        routedEntityId = null,
+                        createdAt = System.currentTimeMillis(),
+                    ),
+                )
+                eventBus.tryPublish(LifeEvent.CaptureCreated(captureId, CaptureKind.BRAIN_DUMP, text))
+                val forms = captureDao.observeForms().first().map { it.name }
+                captureId to brainDumpOrganizer.organize(text, forms)
+            }
+        }
+
+    override suspend fun confirmDumpItem(captureId: Long, item: DumpItem): LifeResult<Unit> =
+        confirm(
+            PendingCapture(
+                captureId = captureId,
+                text = item.body,
+                suggestion = CaptureSuggestion(item.destination, item.title),
+            ),
+            item.destination,
+        )
 
     override suspend fun confirm(
         pending: PendingCapture,
