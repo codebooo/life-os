@@ -37,4 +37,13 @@ sealed interface LifeAction {
         val trackingNumber: String,
         override val source: SourceRef,
     ) : LifeAction
+
+    /** R8: file a scanned receipt into Finance (transaction + optional warranty). */
+    data class RecordReceipt(
+        val docId: Long,
+        val merchant: String?,
+        val totalCents: Long?,
+        val warrantyMonths: Int?,
+        override val source: SourceRef,
+    ) : LifeAction
 }

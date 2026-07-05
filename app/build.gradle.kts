@@ -45,6 +45,7 @@ dependencies {
     implementation(projects.feature.messagecenter)
     implementation(projects.feature.dhl)
     implementation(projects.feature.imagereasoning)
+    implementation(projects.feature.finance)
 
     implementation(projects.core.model)
     implementation(projects.core.network)
