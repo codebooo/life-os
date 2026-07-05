@@ -17,7 +17,7 @@ sealed interface LifeEvent {
     data class NoteSaved(val noteId: Long, val title: String) : LifeEvent
     data class HomeStateChanged(val entityId: String, val state: String) : LifeEvent
     data class ReminderFired(val reminderId: Long, val title: String) : LifeEvent
-    data class CalendarEventChanged(val eventId: Long, val title: String, val startsAt: Long) : LifeEvent
+    data class CalendarEventChanged(val eventId: Long, val title: String, val startsAt: Long, val hasLocation: Boolean = false) : LifeEvent
 
     /** A receipt was scanned and extracted (§Module 11, feeds R8). */
     data class ReceiptScanned(

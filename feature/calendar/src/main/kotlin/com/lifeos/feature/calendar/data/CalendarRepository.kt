@@ -98,7 +98,7 @@ internal class DefaultCalendarRepository @Inject constructor(
                 }
             }
 
-            eventBus.tryPublish(LifeEvent.CalendarEventChanged(eventId, title, startsAt))
+            eventBus.tryPublish(LifeEvent.CalendarEventChanged(eventId, title, startsAt, hasLocation = location != null))
             eventId
         }
     }

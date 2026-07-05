@@ -33,7 +33,12 @@ import com.lifeos.feature.chat.ChatRoute
 import com.lifeos.feature.dhl.PackagesRoute
 import com.lifeos.feature.finance.FinanceRoute
 import com.lifeos.feature.imagereasoning.ScanRoute
+import com.lifeos.feature.books.BooksRoute
+import com.lifeos.feature.nas.NasRoute
 import com.lifeos.feature.notes.NotesRoute
+import com.lifeos.feature.planner.PlannerRoute
+import com.lifeos.feature.route.RouteRoute
+import com.lifeos.feature.smarthome.SmartHomeRoute
 
 /**
  * Single-activity app shell (§1.3): adaptive scaffold, short M3E bottom bar,
@@ -113,6 +118,11 @@ fun LifeOsApp() {
             composable<LifeDestination.Finance> {
                 FinanceRoute()
             }
+            composable<LifeDestination.Nas> { NasRoute() }
+            composable<LifeDestination.Books> { BooksRoute() }
+            composable<LifeDestination.Routes> { RouteRoute() }
+            composable<LifeDestination.SmartHome> { SmartHomeRoute() }
+            composable<LifeDestination.Planner> { PlannerRoute() }
         }
     }
 

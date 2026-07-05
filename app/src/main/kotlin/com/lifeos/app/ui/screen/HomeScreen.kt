@@ -12,7 +12,12 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material3.Card
@@ -68,6 +73,36 @@ fun HomeScreen(onNavigate: (LifeDestination) -> Unit) {
             description = "Receipts, whiteboards, barcodes",
             icon = Icons.Filled.DocumentScanner,
             destination = LifeDestination.Scan,
+        ),
+        AppGridItem(
+            label = "Planner",
+            description = "Jarvis: what deserves you now",
+            icon = Icons.Filled.AutoAwesome,
+            destination = LifeDestination.Planner,
+        ),
+        AppGridItem(
+            label = "Books",
+            description = "Private shelves + what to read next",
+            icon = Icons.AutoMirrored.Filled.MenuBook,
+            destination = LifeDestination.Books,
+        ),
+        AppGridItem(
+            label = "Routes",
+            description = "Saved places, one-tap navigation",
+            icon = Icons.Filled.Navigation,
+            destination = LifeDestination.Routes,
+        ),
+        AppGridItem(
+            label = "Smart home",
+            description = "Home Assistant scenes + toggles",
+            icon = Icons.Filled.Home,
+            destination = LifeDestination.SmartHome,
+        ),
+        AppGridItem(
+            label = "NAS",
+            description = "FileStation browser + server apps",
+            icon = Icons.Filled.Storage,
+            destination = LifeDestination.Nas,
         ),
     )
 

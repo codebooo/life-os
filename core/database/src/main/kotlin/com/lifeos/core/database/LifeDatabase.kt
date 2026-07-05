@@ -15,6 +15,10 @@ import com.lifeos.core.database.finance.FinanceDao
 import com.lifeos.core.database.finance.SubscriptionEntity
 import com.lifeos.core.database.finance.TransactionEntity
 import com.lifeos.core.database.finance.WarrantyEntity
+import com.lifeos.core.database.books.BookDao
+import com.lifeos.core.database.books.BookEntity
+import com.lifeos.core.database.route.RouteDao
+import com.lifeos.core.database.route.SavedPlaceEntity
 import com.lifeos.core.database.email.EmailDao
 import com.lifeos.core.database.email.EmailMessageEntity
 import com.lifeos.core.database.scan.ScanDao
@@ -66,8 +70,10 @@ import com.lifeos.core.database.vault.VaultBlobEntity
         SubscriptionEntity::class,
         WarrantyEntity::class,
         EmailMessageEntity::class,
+        BookEntity::class,
+        SavedPlaceEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -78,6 +84,7 @@ import com.lifeos.core.database.vault.VaultBlobEntity
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9),
+        AutoMigration(from = 9, to = 10),
     ],
 )
 abstract class LifeDatabase : RoomDatabase() {
@@ -93,6 +100,8 @@ abstract class LifeDatabase : RoomDatabase() {
     abstract fun scanDao(): ScanDao
     abstract fun financeDao(): FinanceDao
     abstract fun emailDao(): EmailDao
+    abstract fun bookDao(): BookDao
+    abstract fun routeDao(): RouteDao
 
     companion object {
         const val NAME = "life-os.db"

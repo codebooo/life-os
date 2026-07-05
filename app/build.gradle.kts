@@ -50,6 +50,11 @@ dependencies {
     implementation(projects.feature.imagereasoning)
     implementation(projects.feature.finance)
     implementation(projects.feature.email)
+    implementation(projects.feature.nas)
+    implementation(projects.feature.books)
+    implementation(projects.feature.route)
+    implementation(projects.feature.smarthome)
+    implementation(projects.feature.planner)
 
     implementation(projects.core.model)
     implementation(projects.core.network)

@@ -47,6 +47,12 @@ sealed interface LifeAction {
         override val source: SourceRef,
     ) : LifeAction
 
+    /** R11: run a Home Assistant scene. */
+    data class RunHomeScene(
+        val sceneId: String,
+        override val source: SourceRef,
+    ) : LifeAction
+
     /** R7: a parsed invite becomes a calendar event. */
     data class CreateCalendarEvent(
         val title: String,
