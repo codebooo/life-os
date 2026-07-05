@@ -22,6 +22,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.lifeos.app.ui.screen.HomeScreen
+import com.lifeos.app.ui.screen.InboxTabScreen
 import com.lifeos.app.ui.screen.TasksTabScreen
 import com.lifeos.core.ui.navigation.LifeDestination
 import com.lifeos.core.ui.navigation.TopLevelDestination
@@ -32,7 +33,6 @@ import com.lifeos.feature.chat.ChatRoute
 import com.lifeos.feature.dhl.PackagesRoute
 import com.lifeos.feature.finance.FinanceRoute
 import com.lifeos.feature.imagereasoning.ScanRoute
-import com.lifeos.feature.messagecenter.InboxRoute
 import com.lifeos.feature.notes.NotesRoute
 
 /**
@@ -93,7 +93,7 @@ fun LifeOsApp() {
                 TasksTabScreen()
             }
             composable<LifeDestination.Inbox> {
-                InboxRoute()
+                InboxTabScreen()
             }
             composable<LifeDestination.Assistant> {
                 ChatRoute()

@@ -15,6 +15,8 @@ import com.lifeos.core.database.finance.FinanceDao
 import com.lifeos.core.database.finance.SubscriptionEntity
 import com.lifeos.core.database.finance.TransactionEntity
 import com.lifeos.core.database.finance.WarrantyEntity
+import com.lifeos.core.database.email.EmailDao
+import com.lifeos.core.database.email.EmailMessageEntity
 import com.lifeos.core.database.scan.ScanDao
 import com.lifeos.core.database.scan.ScannedDocumentEntity
 import com.lifeos.core.database.reminders.ReminderDao
@@ -63,8 +65,9 @@ import com.lifeos.core.database.vault.VaultBlobEntity
         CategoryEntity::class,
         SubscriptionEntity::class,
         WarrantyEntity::class,
+        EmailMessageEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -74,6 +77,7 @@ import com.lifeos.core.database.vault.VaultBlobEntity
         AutoMigration(from = 5, to = 6),
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8),
+        AutoMigration(from = 8, to = 9),
     ],
 )
 abstract class LifeDatabase : RoomDatabase() {
@@ -88,6 +92,7 @@ abstract class LifeDatabase : RoomDatabase() {
     abstract fun packageDao(): PackageDao
     abstract fun scanDao(): ScanDao
     abstract fun financeDao(): FinanceDao
+    abstract fun emailDao(): EmailDao
 
     companion object {
         const val NAME = "life-os.db"

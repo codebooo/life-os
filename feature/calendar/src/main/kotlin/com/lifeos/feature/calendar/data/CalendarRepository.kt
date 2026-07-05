@@ -45,7 +45,7 @@ interface CalendarRepository {
 @Singleton
 internal class DefaultCalendarRepository @Inject constructor(
     private val calendarDao: CalendarDao,
-    private val actionDispatcher: LifeActionDispatcher,
+    private val actionDispatcher: dagger.Lazy<LifeActionDispatcher>,
     private val eventBus: LifeEventBus,
     private val dispatchers: DispatcherProvider,
 ) : CalendarRepository {
@@ -83,7 +83,7 @@ internal class DefaultCalendarRepository @Inject constructor(
             if (remindMinutesBefore != null) {
                 val remindAt = startsAt - TimeUnit.MINUTES.toMillis(remindMinutesBefore.toLong())
                 if (remindAt > now) {
-                    val reminderId = actionDispatcher.dispatch(
+                    val reminderId = actionDispatcher.get().dispatch(
                         LifeAction.CreateReminder(
                             title = title,
                             at = remindAt,

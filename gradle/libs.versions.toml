@@ -100,6 +100,7 @@ androidx-camera-view = { group = "androidx.camera", name = "camera-view", versio
 mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitText" }
 mlkit-barcode-scanning = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcode" }
 guava = { group = "com.google.guava", name = "guava", version = "33.3.1-android" }
+angus-mail = { group = "org.eclipse.angus", name = "angus-mail", version = "2.0.5" }
 
 # Crypto
 tink-android = { group = "com.google.crypto.tink", name = "tink-android", version.ref = "tink" }

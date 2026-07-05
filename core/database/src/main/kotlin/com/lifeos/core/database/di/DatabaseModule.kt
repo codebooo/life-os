@@ -9,6 +9,7 @@ import com.lifeos.core.database.chat.ChatDao
 import com.lifeos.core.database.dhl.PackageDao
 import com.lifeos.core.database.messages.MessageDao
 import com.lifeos.core.database.notes.NoteDao
+import com.lifeos.core.database.email.EmailDao
 import com.lifeos.core.database.finance.FinanceDao
 import com.lifeos.core.database.scan.ScanDao
 import com.lifeos.core.database.reminders.ReminderDao
@@ -63,4 +64,7 @@ internal object DatabaseModule {
 
     @Provides
     fun provideFinanceDao(database: LifeDatabase): FinanceDao = database.financeDao()
+
+    @Provides
+    fun provideEmailDao(database: LifeDatabase): EmailDao = database.emailDao()
 }

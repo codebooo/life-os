@@ -46,4 +46,12 @@ sealed interface LifeAction {
         val warrantyMonths: Int?,
         override val source: SourceRef,
     ) : LifeAction
+
+    /** R7: a parsed invite becomes a calendar event. */
+    data class CreateCalendarEvent(
+        val title: String,
+        val startsAt: Long,
+        val endsAt: Long,
+        override val source: SourceRef,
+    ) : LifeAction
 }

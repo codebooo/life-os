@@ -27,6 +27,16 @@ sealed interface LifeEvent {
         val warrantyMonths: Int?,
     ) : LifeEvent
 
+    /** New mail stored by the email module (§Module 1). */
+    data class EmailReceived(
+        val emailId: Long,
+        val from: String,
+        val subject: String,
+        val hasInvoiceSignal: Boolean,
+        val inviteStartsAt: Long?,
+        val inviteTitle: String?,
+    ) : LifeEvent
+
     /** A notification captured by the Message Center listener (§Module 7). */
     data class NotificationPosted(
         val messageId: Long,

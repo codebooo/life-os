@@ -31,6 +31,9 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // Jakarta Mail stack ships duplicate notices; keep service files (§9.4).
+            excludes += "/META-INF/NOTICE.md"
+            excludes += "/META-INF/LICENSE.md"
         }
     }
 }
@@ -46,6 +49,7 @@ dependencies {
     implementation(projects.feature.dhl)
     implementation(projects.feature.imagereasoning)
     implementation(projects.feature.finance)
+    implementation(projects.feature.email)
 
     implementation(projects.core.model)
     implementation(projects.core.network)
