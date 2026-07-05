@@ -13,4 +13,14 @@ interface SettingsRepository {
     val themePalette: Flow<String>
 
     suspend fun setThemePalette(palette: String)
+
+    /** World-clock zone ids shown in the Clock module (§Module 4). */
+    val worldClocks: Flow<List<String>>
+
+    suspend fun setWorldClocks(zoneIds: List<String>)
+
+    /** Whether new local calendar events are mirrored into the system calendar. */
+    val calendarMirror: Flow<Boolean>
+
+    suspend fun setCalendarMirror(enabled: Boolean)
 }

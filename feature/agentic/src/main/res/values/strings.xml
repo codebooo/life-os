@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="agentic_service_description">Runs your own LifeOS macros (open apps, tap buttons, type text) — only when you press Run on a macro you created. Nothing is recorded or sent anywhere.</string>
+</resources>

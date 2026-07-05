@@ -57,6 +57,21 @@ sealed interface LifeDestination {
 
     @Serializable
     data object Settings : LifeDestination
+
+    @Serializable
+    data object Clock : LifeDestination
+
+    @Serializable
+    data object Focus : LifeDestination
+
+    @Serializable
+    data object Memex : LifeDestination
+
+    @Serializable
+    data object Macros : LifeDestination
+
+    @Serializable
+    data object Evolution : LifeDestination
 }
 
 const val DEEP_LINK_SCHEME = "lifeos"

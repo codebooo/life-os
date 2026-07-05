@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- "Clip to archive" from any app's share sheet (§Module 22). -->
+        <activity
+            android:name="com.lifeos.feature.memex.MemexShareActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:label="Clip to LifeOS"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

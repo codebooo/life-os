@@ -21,6 +21,11 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Card
 import androidx.compose.material3.IconButton
@@ -114,6 +119,36 @@ fun HomeScreen(
             description = "FileStation browser + server apps",
             icon = Icons.Filled.Storage,
             destination = LifeDestination.Nas,
+        ),
+        AppGridItem(
+            label = "Clock",
+            description = "Faces, world clock, stopwatch, timer",
+            icon = Icons.Filled.Schedule,
+            destination = LifeDestination.Clock,
+        ),
+        AppGridItem(
+            label = "Focus",
+            description = "Visual timer, streaks, overwhelm mode",
+            icon = Icons.Filled.Bolt,
+            destination = LifeDestination.Focus,
+        ),
+        AppGridItem(
+            label = "Memex",
+            description = "Private archive of what you read",
+            icon = Icons.Filled.Archive,
+            destination = LifeDestination.Memex,
+        ),
+        AppGridItem(
+            label = "Macros",
+            description = "Describe automations in plain words",
+            icon = Icons.Filled.SmartToy,
+            destination = LifeDestination.Macros,
+        ),
+        AppGridItem(
+            label = "Evolution",
+            description = "How your on-device AI is learning",
+            icon = Icons.Filled.Timeline,
+            destination = LifeDestination.Evolution,
         ),
     )
 

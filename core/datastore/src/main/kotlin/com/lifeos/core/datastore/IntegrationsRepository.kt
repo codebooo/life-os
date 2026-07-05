@@ -18,6 +18,10 @@ interface IntegrationsRepository {
     val dhlApiSecret: Flow<String>
     suspend fun setDhlApiKey(key: String)
     suspend fun setDhlApiSecret(secret: String)
+
+    /** MCP-over-HTTP endpoint for the NAS mail MCP (§8.5); empty = IMAP only. */
+    val mailMcpUrl: Flow<String>
+    suspend fun setMailMcpUrl(url: String)
 }
 
 @Singleton
@@ -39,8 +43,16 @@ internal class DataStoreIntegrationsRepository @Inject constructor(
         dataStore.edit { it[KEY_DHL_API_SECRET] = secret.trim() }
     }
 
+    override val mailMcpUrl: Flow<String> =
+        dataStore.data.map { it[KEY_MAIL_MCP_URL] ?: "" }
+
+    override suspend fun setMailMcpUrl(url: String) {
+        dataStore.edit { it[KEY_MAIL_MCP_URL] = url.trim() }
+    }
+
     private companion object {
         val KEY_DHL_API_KEY = stringPreferencesKey("integration_dhl_api_key")
         val KEY_DHL_API_SECRET = stringPreferencesKey("integration_dhl_api_secret")
+        val KEY_MAIL_MCP_URL = stringPreferencesKey("integration_mail_mcp_url")
     }
 }

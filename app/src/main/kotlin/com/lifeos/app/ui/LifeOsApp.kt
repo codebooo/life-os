@@ -27,14 +27,19 @@ import com.lifeos.app.ui.screen.TasksTabScreen
 import com.lifeos.app.ui.settings.SettingsRoute
 import com.lifeos.core.ui.navigation.LifeDestination
 import com.lifeos.core.ui.navigation.TopLevelDestination
+import com.lifeos.feature.adhd.FocusRoute
+import com.lifeos.feature.agentic.MacrosRoute
 import com.lifeos.feature.calendar.CalendarRoute
 import com.lifeos.feature.capture.LoggerRoute
 import com.lifeos.feature.capture.QuickCaptureSheet
 import com.lifeos.feature.chat.ChatRoute
+import com.lifeos.feature.clock.ClockRoute
 import com.lifeos.feature.dhl.PackagesRoute
+import com.lifeos.feature.evolution.EvolutionRoute
 import com.lifeos.feature.finance.FinanceRoute
 import com.lifeos.feature.imagereasoning.ScanRoute
 import com.lifeos.feature.books.BooksRoute
+import com.lifeos.feature.memex.MemexRoute
 import com.lifeos.feature.nas.NasRoute
 import com.lifeos.feature.notes.NotesRoute
 import com.lifeos.feature.planner.PlannerRoute
@@ -137,6 +142,11 @@ fun LifeOsApp(captureRequests: Int = 0) {
             composable<LifeDestination.Settings> {
                 SettingsRoute(onBack = { navController.popBackStack() })
             }
+            composable<LifeDestination.Clock> { ClockRoute() }
+            composable<LifeDestination.Focus> { FocusRoute() }
+            composable<LifeDestination.Memex> { MemexRoute() }
+            composable<LifeDestination.Macros> { MacrosRoute() }
+            composable<LifeDestination.Evolution> { EvolutionRoute() }
         }
     }
 

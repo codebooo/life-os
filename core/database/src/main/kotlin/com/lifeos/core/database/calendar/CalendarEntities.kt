@@ -45,4 +45,10 @@ interface CalendarDao {
 
     @Query("DELETE FROM calendar_events WHERE id = :id")
     suspend fun delete(id: Long)
+
+    @Query("SELECT * FROM calendar_events ORDER BY startsAt")
+    suspend fun allEvents(): List<CalendarEventEntity>
+
+    @Query("SELECT * FROM calendar_events WHERE systemEventId IS NULL ORDER BY startsAt")
+    suspend fun unmirroredEvents(): List<CalendarEventEntity>
 }

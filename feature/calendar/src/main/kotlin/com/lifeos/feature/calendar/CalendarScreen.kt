@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -35,9 +36,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,7 +76,30 @@ internal fun CalendarScreen(uiState: CalendarUiState, onEvent: (CalendarUiEvent)
         }
     }
 
+    val calendarPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { grants ->
+        if (grants.values.all { it }) onEvent(CalendarUiEvent.MirrorToSystem)
+    }
+
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Calendar") },
+                actions = {
+                    IconButton(onClick = {
+                        calendarPermission.launch(
+                            arrayOf(
+                                android.Manifest.permission.READ_CALENDAR,
+                                android.Manifest.permission.WRITE_CALENDAR,
+                            ),
+                        )
+                    }) {
+                        Icon(Icons.Filled.Sync, contentDescription = "Mirror to system calendar")
+                    }
+                },
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = { onEvent(CalendarUiEvent.ToggleEditor) }) {
                 Icon(Icons.Filled.Add, contentDescription = "New event")
