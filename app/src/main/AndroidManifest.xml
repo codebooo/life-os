@@ -35,6 +35,18 @@
             android:exported="false"
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
 
+        <!-- Required companion of the voice-interaction service (see
+             res/xml/voice_interaction.xml); assistant picker hides apps
+             without one. -->
+        <service
+            android:name=".voice.LifeRecognitionService"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+        </service>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -43,6 +55,12 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Assist-gesture fallback so LifeOS also qualifies for the
+                 assistant role on OEM pickers that key off ACTION_ASSIST. -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 

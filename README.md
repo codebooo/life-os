@@ -7,7 +7,7 @@ or on your own NAS (Ollama). No third-party cloud, ever.
 **Spec:** [`docs/PRODUCTION_PLAN.md`](docs/PRODUCTION_PLAN.md). Every module
 and rule traces back to a section (and often a community demand source) there.
 
-## Status — v0.1.0-alpha.1
+## Status — v0.1.0-alpha.3
 
 | Area | State |
 |---|---|
@@ -20,14 +20,15 @@ and rule traces back to a section (and often a community demand source) there.
 | Rules live: R1 tracking→package+reminder · R2 invoice→task · R6 leave-by · R7 invite→event · R8 receipt→finance+warranty · R9 subscriptions · R10 brain-dump · R11 @scene tags · R12 quick-capture routing | ✅ |
 | DHL tracking (hourly polling), Scan (CameraX+ML Kit receipts/boards), Finance (budget, subscriptions, warranties, CSV import) | ✅ |
 | Books, Routes, Smart Home (HA REST), NAS browser + server-apps board, Planner "Jarvis" + Home top card | ✅ |
-| Deferred post-alpha: Clock faces + Glance widgets, system-calendar/ICS mirror, Proton MCP primary mail path, Agentic accessibility macros + NL compiler, Memex archive, Evolution layer, ADHD overlay, HA WebSocket/zones, Vault UI | 🔜 |
+| Assistant role (long-press home → quick capture), Settings hub, theme palette picker, in-app Gemma model downloads | ✅ |
+| Deferred post-alpha: Clock faces + Glance widgets, system-calendar/ICS mirror, Proton MCP primary mail path, Agentic accessibility macros + NL compiler, Memex archive, Evolution layer, ADHD overlay, HA WebSocket/zones, Vault UI, first-run onboarding checklist (grants live in Settings → System access), FinTS bank sync | 🔜 |
 
 ## Install (alpha)
 
 Grab `lifeos-v*.apk` from [Releases](../../releases), then:
 
 ```
-adb install -r -g lifeos-v0.1.0-alpha.1.apk
+adb install -r -g lifeos-v0.1.0-alpha.3.apk
 ```
 
 or copy to the phone and allow *Install unknown apps*. Android 13+ (minSdk 33).

@@ -22,10 +22,13 @@ val LocalLifeSemanticColors = staticCompositionLocalOf { LifeSemanticColors() }
 @Composable
 fun LifeOsTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
+    palette: String = PALETTE_DYNAMIC,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
+    val seed = ThemePalettes[palette]
     val colorScheme = when {
+        seed != null -> if (darkTheme) seededDarkScheme(seed) else seededLightScheme(seed)
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         darkTheme -> FallbackDarkColorScheme

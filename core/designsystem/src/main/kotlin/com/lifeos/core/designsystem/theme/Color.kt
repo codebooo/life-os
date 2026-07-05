@@ -1,8 +1,10 @@
 package com.lifeos.core.designsystem.theme
 
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 
 /**
  * Restrained neutral fallback schemes (§7.1). On the target device (S22 Ultra,
@@ -32,6 +34,44 @@ internal val FallbackDarkColorScheme = darkColorScheme(
     onPrimaryContainer = FallbackPrimaryContainer,
     secondary = Color(0xFFBFCBAD),
     tertiary = Color(0xFFA0D0CB),
+)
+
+/** Sentinel palette id: follow the wallpaper via Material You dynamic color. */
+const val PALETTE_DYNAMIC = "dynamic"
+
+/** Fixed seed palettes selectable in Settings (standard Google hues). */
+val ThemePalettes: Map<String, Color> = linkedMapOf(
+    "blue" to Color(0xFF4285F4),
+    "red" to Color(0xFFEA4335),
+    "yellow" to Color(0xFFFBBC05),
+    "green" to Color(0xFF34A853),
+    "purple" to Color(0xFF9334E6),
+)
+
+internal fun seededLightScheme(seed: Color): ColorScheme = lightColorScheme(
+    primary = lerp(seed, Color.Black, 0.15f),
+    onPrimary = Color.White,
+    primaryContainer = lerp(seed, Color.White, 0.82f),
+    onPrimaryContainer = lerp(seed, Color.Black, 0.65f),
+    secondary = lerp(seed, Color(0xFF5F6368), 0.45f),
+    onSecondary = Color.White,
+    secondaryContainer = lerp(seed, Color.White, 0.72f),
+    onSecondaryContainer = lerp(seed, Color.Black, 0.6f),
+    tertiary = lerp(seed, Color(0xFF00838F), 0.5f),
+    surfaceTint = lerp(seed, Color.Black, 0.15f),
+)
+
+internal fun seededDarkScheme(seed: Color): ColorScheme = darkColorScheme(
+    primary = lerp(seed, Color.White, 0.45f),
+    onPrimary = lerp(seed, Color.Black, 0.65f),
+    primaryContainer = lerp(seed, Color.Black, 0.45f),
+    onPrimaryContainer = lerp(seed, Color.White, 0.82f),
+    secondary = lerp(seed, Color(0xFFDADCE0), 0.55f),
+    onSecondary = lerp(seed, Color.Black, 0.7f),
+    secondaryContainer = lerp(seed, Color.Black, 0.6f),
+    onSecondaryContainer = lerp(seed, Color.White, 0.75f),
+    tertiary = lerp(seed, Color(0xFF80DEEA), 0.45f),
+    surfaceTint = lerp(seed, Color.White, 0.45f),
 )
 
 /** Semantic status colors used by package/finance/etc. surfaces (§7.1). */
