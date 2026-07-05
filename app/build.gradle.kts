@@ -37,6 +37,8 @@ android {
 
 dependencies {
     implementation(projects.feature.chat)
+    implementation(projects.feature.capture)
+    implementation(projects.feature.notes)
 
     implementation(projects.core.model)
     implementation(projects.core.network)

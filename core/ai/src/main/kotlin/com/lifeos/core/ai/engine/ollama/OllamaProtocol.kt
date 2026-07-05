@@ -6,6 +6,7 @@ import com.lifeos.core.ai.model.AiRequest
 import com.lifeos.core.ai.model.AiRole
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 /**

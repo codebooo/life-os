@@ -23,6 +23,13 @@ sealed interface LifeDestination {
 
     @Serializable
     data object Assistant : LifeDestination
+
+    // App-grid destinations (reachable from Home, deep-linkable)
+    @Serializable
+    data object Notes : LifeDestination
+
+    @Serializable
+    data object Logger : LifeDestination
 }
 
 const val DEEP_LINK_SCHEME = "lifeos"

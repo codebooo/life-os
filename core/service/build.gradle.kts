@@ -5,7 +5,7 @@ plugins {
 
 dependencies {
     api(projects.core.model)
-    implementation(projects.core.common)
+    api(projects.core.common)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.service)
     testImplementation(libs.turbine)

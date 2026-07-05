@@ -27,6 +27,8 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 include(":app")
 include(":feature:chat")
+include(":feature:capture")
+include(":feature:notes")
 include(":core:model")
 include(":core:network")
 include(":core:ai")
