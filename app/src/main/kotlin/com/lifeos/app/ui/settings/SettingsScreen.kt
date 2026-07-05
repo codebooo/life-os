@@ -2,17 +2,25 @@ package com.lifeos.app.ui.settings
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -28,12 +36,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lifeos.core.designsystem.component.SectionHeader
+import com.lifeos.core.designsystem.theme.PALETTE_DYNAMIC
+import com.lifeos.core.designsystem.theme.ThemePalettes
 
 /** Central settings (§8.4 onboarding grants + endpoints in one place). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,6 +84,40 @@ fun SettingsRoute(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            SectionHeader(title = "Theme")
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FilterChip(
+                    selected = uiState.themePalette == PALETTE_DYNAMIC,
+                    onClick = { viewModel.onEvent(SettingsUiEvent.ThemePaletteChanged(PALETTE_DYNAMIC)) },
+                    label = { Text("Dynamic") },
+                )
+                ThemePalettes.forEach { (id, color) ->
+                    val selected = uiState.themePalette == id
+                    Box(
+                        modifier = Modifier
+                            .size(if (selected) 36.dp else 30.dp)
+                            .clip(CircleShape)
+                            .background(color)
+                            .then(
+                                if (selected) {
+                                    Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .clickable { viewModel.onEvent(SettingsUiEvent.ThemePaletteChanged(id)) },
+                    )
+                }
+            }
+            Text(
+                "Dynamic follows your wallpaper (Material You); a color fixes the accent palette.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
             SectionHeader(title = "AI")
             OutlinedTextField(
                 value = uiState.ollamaBaseUrl,

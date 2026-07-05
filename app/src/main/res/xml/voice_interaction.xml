@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- recognitionService is mandatory: without it the framework marks the
+     voice-interaction service invalid and hides LifeOS from the
+     "Default digital assistant" picker. -->
 <voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:sessionService="com.lifeos.app.voice.LifeVoiceSessionService"
+    android:recognitionService="com.lifeos.app.voice.LifeRecognitionService"
     android:supportsAssist="true"
     android:supportsLaunchVoiceAssistFromKeyguard="true" />

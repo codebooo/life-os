@@ -8,4 +8,9 @@ interface SettingsRepository {
     val onboardingCompleted: Flow<Boolean>
 
     suspend fun setOnboardingCompleted(completed: Boolean)
+
+    /** Theme palette id: "dynamic" (wallpaper) or a fixed seed from Settings. */
+    val themePalette: Flow<String>
+
+    suspend fun setThemePalette(palette: String)
 }
