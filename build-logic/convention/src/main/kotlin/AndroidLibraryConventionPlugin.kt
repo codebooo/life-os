@@ -16,6 +16,8 @@ class AndroidLibraryConventionPlugin : Plugin<Project> {
                 configureKotlinAndroid(this)
                 // Derive a unique namespace from the module path, e.g. :core:vault -> com.lifeos.core.vault
                 namespace = "com.lifeos" + path.replace(":", ".")
+                // Framework calls (android.util.Log etc.) return defaults in JVM unit tests.
+                testOptions.unitTests.isReturnDefaultValues = true
             }
         }
     }

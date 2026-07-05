@@ -15,21 +15,25 @@ community demand source) in that document.
 | Phase | Scope | State |
 |---|---|---|
 | **0 — Foundation** | Multi-module skeleton, build-logic, M3 Expressive theme, Room DB, DataStore, encrypted Vault scaffolding, app shell + nav, foreground service + boot receiver, CI | ✅ done |
-| 1 — AI layer + Chat | `:core:network`, `:core:ai` (Ollama + AiRouter + MCP), `:feature:chat` | ⏳ next |
-| 2+ | See roadmap §6 of the plan | — |
+| **1 — AI layer + Chat** | `:core:network`, `:core:ai` (Ollama streaming + on-device Gemma + `AiRouter` fallback), `:feature:chat` with streaming UI + engine settings | ✅ done |
+| 2 — Capture spine + Notes + RAG | `QuickCaptureSheet`, `:feature:capture`, `:feature:notes`, `NotesRag` | ⏳ next |
+| 3+ | See roadmap §6 of the plan | — |
 
 ## Project layout
 
 ```
 app/                  Single-activity shell: theme, bottom bar, NavHost
 core/model            Pure Kotlin domain models (no Android deps)
+core/network          OkHttp client factory, connectivity observer
+core/ai               AiRouter, OllamaEngine (streaming), GemmaEngine (on-device)
 core/common           DispatcherProvider, LifeResult/LifeError, base ViewModel, logging
 core/designsystem     Material 3 Expressive theme, dynamic color, shared composables
 core/database         Room LifeDatabase (all entities/DAOs/migrations)
 core/datastore        Typed DataStore settings repositories
 core/vault            Encrypted at-rest blob store (Tink + Android Keystore)
 core/service          LifeOsForegroundService, LifeEventBus, BootReceiver
-core/ui               Navigation contracts (LifeDestination, top-level destinations)
+core/ui               Navigation contracts, AiInputBar
+feature/chat          Assistant chat: streaming replies, conversations, AI settings
 build-logic/          Convention plugins (lifeos.android.*, lifeos.hilt, …)
 docs/                 PRODUCTION_PLAN.md — the spec
 ```

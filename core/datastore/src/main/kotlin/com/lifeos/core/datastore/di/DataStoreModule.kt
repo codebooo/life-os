@@ -5,6 +5,8 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
+import com.lifeos.core.datastore.AiConfigRepository
+import com.lifeos.core.datastore.DataStoreAiConfigRepository
 import com.lifeos.core.datastore.DataStoreSettingsRepository
 import com.lifeos.core.datastore.SettingsRepository
 import dagger.Binds
@@ -33,4 +35,7 @@ internal abstract class DataStoreBindsModule {
 
     @Binds
     abstract fun bindSettingsRepository(impl: DataStoreSettingsRepository): SettingsRepository
+
+    @Binds
+    abstract fun bindAiConfigRepository(impl: DataStoreAiConfigRepository): AiConfigRepository
 }

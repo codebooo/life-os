@@ -26,7 +26,10 @@ rootProject.name = "life-os"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 include(":app")
+include(":feature:chat")
 include(":core:model")
+include(":core:network")
+include(":core:ai")
 include(":core:common")
 include(":core:designsystem")
 include(":core:database")

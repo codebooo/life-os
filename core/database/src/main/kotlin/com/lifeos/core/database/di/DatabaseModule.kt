@@ -3,6 +3,7 @@ package com.lifeos.core.database.di
 import android.content.Context
 import androidx.room.Room
 import com.lifeos.core.database.LifeDatabase
+import com.lifeos.core.database.chat.ChatDao
 import com.lifeos.core.database.vault.VaultBlobDao
 import dagger.Module
 import dagger.Provides
@@ -23,4 +24,7 @@ internal object DatabaseModule {
 
     @Provides
     fun provideVaultBlobDao(database: LifeDatabase): VaultBlobDao = database.vaultBlobDao()
+
+    @Provides
+    fun provideChatDao(database: LifeDatabase): ChatDao = database.chatDao()
 }

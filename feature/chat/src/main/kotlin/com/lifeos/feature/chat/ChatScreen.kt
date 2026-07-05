@@ -1,0 +1,216 @@
+package com.lifeos.feature.chat
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.lifeos.core.database.chat.AiMessageEntity
+import com.lifeos.core.designsystem.component.EmptyState
+import com.lifeos.core.ui.component.AiInputBar
+import com.lifeos.feature.chat.settings.AiSettingsSheet
+
+/** Entry point for the Assistant tab (§Module 18). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChatRoute(viewModel: ChatViewModel = hiltViewModel()) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    ChatScreen(uiState = uiState, onEvent = viewModel::onEvent)
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ChatScreen(
+    uiState: ChatUiState,
+    onEvent: (ChatUiEvent) -> Unit,
+) {
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let {
+            snackbarHostState.showSnackbar(it)
+            onEvent(ChatUiEvent.DismissError)
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Assistant") },
+                actions = {
+                    uiState.activeEngine?.let { engine ->
+                        AssistChip(onClick = {}, label = { Text(engine.label) })
+                    }
+                    IconButton(onClick = { onEvent(ChatUiEvent.NewConversation) }) {
+                        Icon(Icons.Filled.Add, contentDescription = "New conversation")
+                    }
+                    IconButton(onClick = { onEvent(ChatUiEvent.ToggleConversations) }) {
+                        Icon(Icons.Filled.History, contentDescription = "Conversations")
+                    }
+                    IconButton(onClick = { onEvent(ChatUiEvent.ToggleSettings) }) {
+                        Icon(Icons.Filled.Settings, contentDescription = "AI settings")
+                    }
+                },
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .imePadding(),
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                if (uiState.messages.isEmpty()) {
+                    EmptyState(
+                        title = "Ask anything",
+                        description = "Answers come from your NAS or stay fully on-device — never a third-party cloud.",
+                    )
+                } else {
+                    MessageList(messages = uiState.messages, streaming = uiState.streaming)
+                }
+            }
+            AiInputBar(
+                value = uiState.input,
+                onValueChange = { onEvent(ChatUiEvent.InputChanged(it)) },
+                onSend = { onEvent(ChatUiEvent.Send) },
+                busy = uiState.streaming,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            )
+        }
+    }
+
+    if (uiState.showConversations) {
+        ModalBottomSheet(onDismissRequest = { onEvent(ChatUiEvent.ToggleConversations) }) {
+            if (uiState.conversations.isEmpty()) {
+                Text(
+                    "No conversations yet",
+                    modifier = Modifier.padding(24.dp),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+            }
+            LazyColumn {
+                items(uiState.conversations, key = { it.id }) { conversation ->
+                    Surface(
+                        onClick = { onEvent(ChatUiEvent.SelectConversation(conversation.id)) },
+                        tonalElevation = if (conversation.id == uiState.activeConversationId) 4.dp else 0.dp,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        ListItem(
+                            headlineContent = {
+                                Text(conversation.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            },
+                            trailingContent = {
+                                IconButton(onClick = { onEvent(ChatUiEvent.DeleteConversation(conversation.id)) }) {
+                                    Icon(Icons.Filled.Delete, contentDescription = "Delete")
+                                }
+                            },
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (uiState.showSettings) {
+        AiSettingsSheet(onDismiss = { onEvent(ChatUiEvent.ToggleSettings) })
+    }
+}
+
+@Composable
+private fun MessageList(messages: List<AiMessageEntity>, streaming: Boolean) {
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
+        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+    }
+
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        items(messages, key = { it.id }) { message ->
+            MessageBubble(message)
+        }
+    }
+}
+
+@Composable
+private fun MessageBubble(message: AiMessageEntity) {
+    val isUser = message.role == "user"
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+    ) {
+        Box(
+            modifier = Modifier
+                .widthIn(max = 320.dp)
+                .background(
+                    color = if (isUser) {
+                        MaterialTheme.colorScheme.primaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.surfaceContainerHigh
+                    },
+                    shape = RoundedCornerShape(
+                        topStart = 20.dp,
+                        topEnd = 20.dp,
+                        bottomStart = if (isUser) 20.dp else 4.dp,
+                        bottomEnd = if (isUser) 4.dp else 20.dp,
+                    ),
+                )
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        ) {
+            Column(horizontalAlignment = Alignment.Start) {
+                Text(
+                    text = message.content.ifBlank { "…" },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (isUser) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+            }
+        }
+    }
+}

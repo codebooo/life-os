@@ -18,6 +18,7 @@ import androidx.navigation.compose.rememberNavController
 import com.lifeos.app.ui.screen.PlaceholderScreen
 import com.lifeos.core.ui.navigation.LifeDestination
 import com.lifeos.core.ui.navigation.TopLevelDestination
+import com.lifeos.feature.chat.ChatRoute
 
 /**
  * Single-activity app shell (§1.3): adaptive scaffold, short M3E bottom bar,
@@ -86,10 +87,7 @@ fun LifeOsApp() {
                 )
             }
             composable<LifeDestination.Assistant> {
-                PlaceholderScreen(
-                    title = "Assistant",
-                    description = "Streaming Gemma 4 chat arrives in Phase 1.",
-                )
+                ChatRoute()
             }
         }
     }

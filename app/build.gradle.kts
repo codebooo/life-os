@@ -36,7 +36,11 @@ android {
 }
 
 dependencies {
+    implementation(projects.feature.chat)
+
     implementation(projects.core.model)
+    implementation(projects.core.network)
+    implementation(projects.core.ai)
     implementation(projects.core.common)
     implementation(projects.core.designsystem)
     implementation(projects.core.database)
