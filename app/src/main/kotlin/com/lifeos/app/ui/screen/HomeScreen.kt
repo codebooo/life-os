@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
@@ -54,6 +55,12 @@ fun HomeScreen(onNavigate: (LifeDestination) -> Unit) {
             description = "DHL tracking + delivery reminders",
             icon = Icons.Filled.LocalShipping,
             destination = LifeDestination.Packages,
+        ),
+        AppGridItem(
+            label = "Scan",
+            description = "Receipts, whiteboards, barcodes",
+            icon = Icons.Filled.DocumentScanner,
+            destination = LifeDestination.Scan,
         ),
     )
 

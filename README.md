@@ -20,7 +20,8 @@ community demand source) in that document.
 | **3 — Time core** | Reminders (exact alarms, full-screen over lockscreen, boot reschedule, NL time), full To-Do (lists + nesting + Inbox), local-first Calendar (month grid, agenda, reminder linking) | ✅ mostly — system-provider/ICS sync, Clock + widgets follow |
 | **4 — Rules engine + Message Center** | `RulesEngine` (multibound rules, loop guard) live in the foreground service; notification listener → unified inbox; first end-to-end rule (tracking number → task, with provenance + dedupe) | ✅ done |
 | **5 — DHL + R1** | Package tracker (DHL Unified Tracking API, hourly WorkManager polling, status notifications), rule R1 complete: notification/capture → package → delivery-morning reminder | ✅ done |
-| 6+ | Image Reasoning, Finance, Email, Voice, … (§6 of the plan) | ⏳ next |
+| **6 — Image Reasoning** | CameraX scan, ML Kit OCR/barcode on-device, receipt extraction (merchant/total/date/warranty), board→Markdown-note, ReceiptScanned event (R8 trigger) | ✅ done |
+| 7+ | Finance, Email, Voice, … (§6 of the plan) | ⏳ next |
 
 ## Project layout
 
@@ -44,6 +45,7 @@ feature/todo          Task lists, nesting, capture Inbox
 feature/calendar      Local-first calendar: month grid, agenda, reminder link
 feature/messagecenter Notification listener → unified inbox + tracking-number rule
 feature/dhl           DHL package tracking, polling worker, delivery reminders
+feature/imagereasoning CameraX + ML Kit scan: receipts, boards, barcodes
 build-logic/          Convention plugins (lifeos.android.*, lifeos.hilt, …)
 docs/                 PRODUCTION_PLAN.md — the spec
 ```

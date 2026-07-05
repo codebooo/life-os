@@ -44,6 +44,7 @@ dependencies {
     implementation(projects.feature.calendar)
     implementation(projects.feature.messagecenter)
     implementation(projects.feature.dhl)
+    implementation(projects.feature.imagereasoning)
 
     implementation(projects.core.model)
     implementation(projects.core.network)

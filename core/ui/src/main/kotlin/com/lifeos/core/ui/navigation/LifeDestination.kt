@@ -33,6 +33,9 @@ sealed interface LifeDestination {
 
     @Serializable
     data object Packages : LifeDestination
+
+    @Serializable
+    data object Scan : LifeDestination
 }
 
 const val DEEP_LINK_SCHEME = "lifeos"
