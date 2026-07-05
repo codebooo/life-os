@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Simple concentric "orbit" mark; replaced by real branding later. -->
+    <path
+        android:fillColor="#B1D18A"
+        android:pathData="M54,30a24,24 0 1,0 0.001,0zM54,38a16,16 0 1,1 -0.001,0z" />
+    <path
+        android:fillColor="#CDEDA3"
+        android:pathData="M54,48a6,6 0 1,0 0.001,0z" />
+</vector>

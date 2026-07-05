@@ -1,0 +1,24 @@
+import com.android.build.api.dsl.LibraryExtension
+import com.lifeos.buildlogic.configureKotlinAndroid
+import org.gradle.api.Plugin
+import org.gradle.api.Project
+import org.gradle.kotlin.dsl.configure
+
+class AndroidLibraryConventionPlugin : Plugin<Project> {
+    override fun apply(target: Project) {
+        with(target) {
+            with(pluginManager) {
+                apply("com.android.library")
+                apply("org.jetbrains.kotlin.android")
+            }
+
+            extensions.configure<LibraryExtension> {
+                configureKotlinAndroid(this)
+                // Derive a unique namespace from the module path, e.g. :core:vault -> com.lifeos.core.vault
+                namespace = "com.lifeos" + path.replace(":", ".")
+                // Framework calls (android.util.Log etc.) return defaults in JVM unit tests.
+                testOptions.unitTests.isReturnDefaultValues = true
+            }
+        }
+    }
+}
