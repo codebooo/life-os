@@ -9,6 +9,6 @@ captures/
 .cxx/
 *.apk
 *.aab
-*.keystore
+# release.keystore committed on purpose (personal sideload signing)
 !debug.keystore
 /models/

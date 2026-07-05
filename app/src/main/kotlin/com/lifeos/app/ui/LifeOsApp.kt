@@ -22,6 +22,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.lifeos.app.ui.screen.HomeScreen
+import com.lifeos.app.ui.screen.InboxTabScreen
 import com.lifeos.app.ui.screen.TasksTabScreen
 import com.lifeos.core.ui.navigation.LifeDestination
 import com.lifeos.core.ui.navigation.TopLevelDestination
@@ -30,8 +31,14 @@ import com.lifeos.feature.capture.LoggerRoute
 import com.lifeos.feature.capture.QuickCaptureSheet
 import com.lifeos.feature.chat.ChatRoute
 import com.lifeos.feature.dhl.PackagesRoute
-import com.lifeos.feature.messagecenter.InboxRoute
+import com.lifeos.feature.finance.FinanceRoute
+import com.lifeos.feature.imagereasoning.ScanRoute
+import com.lifeos.feature.books.BooksRoute
+import com.lifeos.feature.nas.NasRoute
 import com.lifeos.feature.notes.NotesRoute
+import com.lifeos.feature.planner.PlannerRoute
+import com.lifeos.feature.route.RouteRoute
+import com.lifeos.feature.smarthome.SmartHomeRoute
 
 /**
  * Single-activity app shell (§1.3): adaptive scaffold, short M3E bottom bar,
@@ -91,7 +98,7 @@ fun LifeOsApp() {
                 TasksTabScreen()
             }
             composable<LifeDestination.Inbox> {
-                InboxRoute()
+                InboxTabScreen()
             }
             composable<LifeDestination.Assistant> {
                 ChatRoute()
@@ -105,6 +112,17 @@ fun LifeOsApp() {
             composable<LifeDestination.Packages> {
                 PackagesRoute()
             }
+            composable<LifeDestination.Scan> {
+                ScanRoute()
+            }
+            composable<LifeDestination.Finance> {
+                FinanceRoute()
+            }
+            composable<LifeDestination.Nas> { NasRoute() }
+            composable<LifeDestination.Books> { BooksRoute() }
+            composable<LifeDestination.Routes> { RouteRoute() }
+            composable<LifeDestination.SmartHome> { SmartHomeRoute() }
+            composable<LifeDestination.Planner> { PlannerRoute() }
         }
     }
 

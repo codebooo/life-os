@@ -17,7 +17,25 @@ sealed interface LifeEvent {
     data class NoteSaved(val noteId: Long, val title: String) : LifeEvent
     data class HomeStateChanged(val entityId: String, val state: String) : LifeEvent
     data class ReminderFired(val reminderId: Long, val title: String) : LifeEvent
-    data class CalendarEventChanged(val eventId: Long, val title: String, val startsAt: Long) : LifeEvent
+    data class CalendarEventChanged(val eventId: Long, val title: String, val startsAt: Long, val hasLocation: Boolean = false) : LifeEvent
+
+    /** A receipt was scanned and extracted (§Module 11, feeds R8). */
+    data class ReceiptScanned(
+        val docId: Long,
+        val merchant: String?,
+        val totalCents: Long?,
+        val warrantyMonths: Int?,
+    ) : LifeEvent
+
+    /** New mail stored by the email module (§Module 1). */
+    data class EmailReceived(
+        val emailId: Long,
+        val from: String,
+        val subject: String,
+        val hasInvoiceSignal: Boolean,
+        val inviteStartsAt: Long?,
+        val inviteTitle: String?,
+    ) : LifeEvent
 
     /** A notification captured by the Message Center listener (§Module 7). */
     data class NotificationPosted(

@@ -1,5 +1,9 @@
 package com.lifeos.feature.capture
 
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,13 +16,19 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +55,14 @@ fun QuickCaptureSheet(
     viewModel: QuickCaptureViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    val voiceLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()
+            ?.let { viewModel.onEvent(QuickCaptureUiEvent.VoiceResult(it)) }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.effects.collect { effect ->
@@ -76,7 +94,23 @@ fun QuickCaptureSheet(
                 trailingIcon = if (uiState.classifying) {
                     { CircularProgressIndicator(modifier = Modifier.padding(8.dp), strokeWidth = 2.dp) }
                 } else {
-                    null
+                    {
+                        IconButton(onClick = {
+                            // Brain-dump path ([src 16]): speak freely, review the split.
+                            voiceLauncher.launch(
+                                Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                    putExtra(
+                                        RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                                        RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+                                    )
+                                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Just get it out of your head")
+                                },
+                            )
+                        }) {
+                            Icon(Icons.Filled.Mic, contentDescription = "Voice brain-dump")
+                        }
+                    }
                 },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { viewModel.onEvent(QuickCaptureUiEvent.Submit) }),
@@ -85,6 +119,39 @@ fun QuickCaptureSheet(
 
             uiState.error?.let { error ->
                 Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+
+            if (uiState.dumpItems.isNotEmpty()) {
+                Text(
+                    "Review ${uiState.dumpItems.size} items:",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                uiState.dumpItems.forEachIndexed { index, item ->
+                    Card {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(start = 12.dp),
+                        ) {
+                            Text(
+                                "${item.destination.name.lowercase()}: ${item.title}",
+                                modifier = Modifier.weight(1f),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            IconButton(onClick = { viewModel.onEvent(QuickCaptureUiEvent.ConfirmDumpItem(index)) }) {
+                                Icon(Icons.Filled.Check, contentDescription = "Save")
+                            }
+                            IconButton(onClick = { viewModel.onEvent(QuickCaptureUiEvent.DiscardDumpItem(index)) }) {
+                                Icon(Icons.Filled.Close, contentDescription = "Discard")
+                            }
+                        }
+                    }
+                }
+                Button(
+                    onClick = { viewModel.onEvent(QuickCaptureUiEvent.SaveAllDumpItems) },
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Save all")
+                }
             }
 
             uiState.pending?.let { pending ->

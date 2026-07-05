@@ -33,6 +33,27 @@ sealed interface LifeDestination {
 
     @Serializable
     data object Packages : LifeDestination
+
+    @Serializable
+    data object Scan : LifeDestination
+
+    @Serializable
+    data object Finance : LifeDestination
+
+    @Serializable
+    data object Nas : LifeDestination
+
+    @Serializable
+    data object Books : LifeDestination
+
+    @Serializable
+    data object Routes : LifeDestination
+
+    @Serializable
+    data object SmartHome : LifeDestination
+
+    @Serializable
+    data object Planner : LifeDestination
 }
 
 const val DEEP_LINK_SCHEME = "lifeos"
