@@ -29,7 +29,7 @@ interface PackagesRepository {
     fun observePackages(): Flow<List<PackageEntity>>
     fun observeEvents(packageId: Long): Flow<List<TrackingEventEntity>>
 
-    /** Idempotent per tracking number (R1 dedupe). */
+    /** Idempotent per tracking number (R1 dedupe). Surfaces the first-refresh error. */
     suspend fun addPackage(trackingNumber: String, label: String?, source: SourceRef?): LifeResult<Long>
     suspend fun refresh(packageId: Long): LifeResult<Unit>
     suspend fun refreshAllActive()
@@ -72,7 +72,12 @@ internal class DefaultPackagesRepository @Inject constructor(
                     createdAt = System.currentTimeMillis(),
                 ),
             )
-            refresh(id)
+            when (val refreshed = refresh(id)) {
+                is LifeResult.Success -> Unit
+                is LifeResult.Failure ->
+                    // Keep the package, but the user must see why data is missing.
+                    error("Package saved, refresh failed: ${refreshed.error.message}")
+            }
             id
         }
     }
@@ -81,9 +86,13 @@ internal class DefaultPackagesRepository @Inject constructor(
         runCatchingLife {
             val pkg = packageDao.getById(packageId) ?: error("Package not found")
             val apiKey = integrationsRepository.dhlApiKey.first()
-            check(apiKey.isNotBlank()) { "DHL API key not configured — add it in Packages settings" }
+            check(apiKey.isNotBlank()) { "DHL API key not configured — add it via the key icon above" }
 
-            val shipment = dhlApi.track(pkg.trackingNumber, apiKey)
+            val shipment = dhlApi.track(
+                pkg.trackingNumber,
+                apiKey,
+                integrationsRepository.dhlApiSecret.first(),
+            )
             val statusChanged = shipment.status != pkg.status && shipment.status != "NOT_FOUND"
 
             packageDao.deleteEventsOf(packageId)

@@ -17,10 +17,13 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Card
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -115,11 +118,17 @@ fun HomeScreen(
     )
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            "LifeOS",
-            style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Text("LifeOS", style = MaterialTheme.typography.headlineMedium)
+            IconButton(onClick = { onNavigate(LifeDestination.Settings) }) {
+                Icon(Icons.Filled.Settings, contentDescription = "Settings")
+            }
+        }
         // §7.6: the Planner "Next:" top card ([src 40]).
         plannerState.plan.firstOrNull()?.let { next ->
             Card(

@@ -249,6 +249,13 @@ private fun ImportTab(uiState: FinanceUiState, onEvent: (FinanceUiEvent) -> Unit
             "Paste CSV (date, merchant, amount) — Mint/bank exports. Everything stays on-device.",
             style = MaterialTheme.typography.bodyMedium,
         )
+        Text(
+            "Direct Sparkasse sync: the PSD2 banking API is limited to BaFin-licensed providers, so personal " +
+                "apps can't connect the way Finanzguru does. The open FinTS/HBCI protocol is the planned route " +
+                "(needs a free DK product registration). Until then: export CSV from your banking app.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         OutlinedTextField(
             value = uiState.csvText,
             onValueChange = { onEvent(FinanceUiEvent.CsvChanged(it)) },

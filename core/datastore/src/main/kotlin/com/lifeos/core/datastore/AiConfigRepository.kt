@@ -10,6 +10,8 @@ data class AiConfig(
     val ollamaModel: String,
     /** Absolute path of the on-device Gemma model file. Blank = default models dir. */
     val onDeviceModelPath: String,
+    /** Hugging Face token — needed because Google's Gemma repos are license-gated. */
+    val hfToken: String,
 )
 
 interface AiConfigRepository {
@@ -18,4 +20,5 @@ interface AiConfigRepository {
     suspend fun setOllamaBaseUrl(url: String)
     suspend fun setOllamaModel(model: String)
     suspend fun setOnDeviceModelPath(path: String)
+    suspend fun setHfToken(token: String)
 }

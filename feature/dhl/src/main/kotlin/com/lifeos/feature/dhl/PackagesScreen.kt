@@ -73,10 +73,20 @@ fun PackagesRoute(viewModel: PackagesViewModel = hiltViewModel()) {
                     value = uiState.apiKeyDraft,
                     onValueChange = { viewModel.onEvent(PackagesUiEvent.ApiKeyChanged(it)) },
                     label = { Text("DHL API key") },
-                    supportingText = { Text("From developer.dhl.com — stored on-device only") },
+                    supportingText = { Text("From developer.dhl.com — stored on-device only. Fresh keys can take a few hours to activate.") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+                OutlinedTextField(
+                    value = uiState.apiSecretDraft,
+                    onValueChange = { viewModel.onEvent(PackagesUiEvent.ApiSecretChanged(it)) },
+                    label = { Text("DHL API secret (optional)") },
+                    supportingText = { Text("Only needed for the Parcel DE API family") },
                     trailingIcon = {
                         IconButton(onClick = { viewModel.onEvent(PackagesUiEvent.SaveApiKey) }) {
-                            Icon(Icons.Filled.Add, contentDescription = "Save key")
+                            Icon(Icons.Filled.Add, contentDescription = "Save credentials")
                         }
                     },
                     singleLine = true,

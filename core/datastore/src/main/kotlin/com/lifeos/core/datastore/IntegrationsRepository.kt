@@ -15,7 +15,9 @@ import javax.inject.Singleton
  */
 interface IntegrationsRepository {
     val dhlApiKey: Flow<String>
+    val dhlApiSecret: Flow<String>
     suspend fun setDhlApiKey(key: String)
+    suspend fun setDhlApiSecret(secret: String)
 }
 
 @Singleton
@@ -26,11 +28,19 @@ internal class DataStoreIntegrationsRepository @Inject constructor(
     override val dhlApiKey: Flow<String> =
         dataStore.data.map { it[KEY_DHL_API_KEY] ?: "" }
 
+    override val dhlApiSecret: Flow<String> =
+        dataStore.data.map { it[KEY_DHL_API_SECRET] ?: "" }
+
     override suspend fun setDhlApiKey(key: String) {
         dataStore.edit { it[KEY_DHL_API_KEY] = key.trim() }
     }
 
+    override suspend fun setDhlApiSecret(secret: String) {
+        dataStore.edit { it[KEY_DHL_API_SECRET] = secret.trim() }
+    }
+
     private companion object {
         val KEY_DHL_API_KEY = stringPreferencesKey("integration_dhl_api_key")
+        val KEY_DHL_API_SECRET = stringPreferencesKey("integration_dhl_api_secret")
     }
 }
