@@ -25,4 +25,10 @@ sealed interface LifeAction {
         val valuesJson: String,
         override val source: SourceRef,
     ) : LifeAction
+
+    data class CreateReminder(
+        val title: String,
+        val at: Long,
+        override val source: SourceRef,
+    ) : LifeAction
 }

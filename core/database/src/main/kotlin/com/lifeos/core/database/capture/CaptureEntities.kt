@@ -54,14 +54,17 @@ data class LogEntryEntity(
 )
 
 /**
- * Minimal task row: the capture spine's target for "task" routings. The full
- * to-do module (nesting, lists, links) builds this out in Phase 3.
+ * A task (§Module 3). [listId] null = the implicit Inbox (where quick
+ * captures land); [parentId] enables one-level-plus nesting.
  */
 @Entity(tableName = "tasks")
 data class TaskEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
     val done: Boolean = false,
+    val listId: Long? = null,
+    val parentId: Long? = null,
+    val dueAt: Long? = null,
     val sourceModule: String?,
     val sourceEntityId: Long?,
     val createdAt: Long,

@@ -3,9 +3,12 @@ package com.lifeos.core.database.di
 import android.content.Context
 import androidx.room.Room
 import com.lifeos.core.database.LifeDatabase
+import com.lifeos.core.database.calendar.CalendarDao
 import com.lifeos.core.database.capture.CaptureDao
 import com.lifeos.core.database.chat.ChatDao
 import com.lifeos.core.database.notes.NoteDao
+import com.lifeos.core.database.reminders.ReminderDao
+import com.lifeos.core.database.todo.TodoDao
 import com.lifeos.core.database.vault.VaultBlobDao
 import dagger.Module
 import dagger.Provides
@@ -35,4 +38,13 @@ internal object DatabaseModule {
 
     @Provides
     fun provideNoteDao(database: LifeDatabase): NoteDao = database.noteDao()
+
+    @Provides
+    fun provideReminderDao(database: LifeDatabase): ReminderDao = database.reminderDao()
+
+    @Provides
+    fun provideTodoDao(database: LifeDatabase): TodoDao = database.todoDao()
+
+    @Provides
+    fun provideCalendarDao(database: LifeDatabase): CalendarDao = database.calendarDao()
 }

@@ -17,8 +17,8 @@ community demand source) in that document.
 | **0 — Foundation** | Multi-module skeleton, build-logic, M3 Expressive theme, Room DB, DataStore, encrypted Vault scaffolding, app shell + nav, foreground service + boot receiver, CI | ✅ done |
 | **1 — AI layer + Chat** | `:core:network`, `:core:ai` (Ollama streaming + on-device Gemma + `AiRouter` fallback), `:feature:chat` with streaming UI + engine settings | ✅ done |
 | **2 — Capture spine + Notes + RAG** | Global `QuickCaptureSheet` + AI routing, `:feature:capture` (structured logger, interim tasks), `:feature:notes` (Markdown files, vault option, backlinks), `NotesRag` ask-my-notes | ✅ done |
-| 3 — Time core | Reminders (exact alarms), Calendar (ical4j + provider), Clock, full To-Do | ⏳ next |
-| 4+ | See roadmap §6 of the plan | — |
+| **3 — Time core** | Reminders (exact alarms, full-screen over lockscreen, boot reschedule, NL time), full To-Do (lists + nesting + Inbox), local-first Calendar (month grid, agenda, reminder linking) | ✅ mostly — system-provider/ICS sync, Clock + widgets follow |
+| 4+ | Event bus rules engine, Message Center, DHL, … (§6 of the plan) | ⏳ next |
 
 ## Project layout
 
@@ -37,6 +37,9 @@ core/ui               Navigation contracts, AiInputBar
 feature/chat          Assistant chat: streaming replies, conversations, AI settings
 feature/capture       Quick-capture spine + structured logger + interim tasks
 feature/notes         Local-first Markdown notes, backlinks, ask-my-notes (RAG)
+feature/reminders     Exact alarms, full-screen alarm activity, boot reschedule
+feature/todo          Task lists, nesting, capture Inbox
+feature/calendar      Local-first calendar: month grid, agenda, reminder link
 build-logic/          Convention plugins (lifeos.android.*, lifeos.hilt, …)
 docs/                 PRODUCTION_PLAN.md — the spec
 ```

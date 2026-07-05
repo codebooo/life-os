@@ -16,4 +16,6 @@ sealed interface LifeEvent {
     data class CaptureCreated(val captureId: Long, val kind: CaptureKind, val text: String?) : LifeEvent
     data class NoteSaved(val noteId: Long, val title: String) : LifeEvent
     data class HomeStateChanged(val entityId: String, val state: String) : LifeEvent
+    data class ReminderFired(val reminderId: Long, val title: String) : LifeEvent
+    data class CalendarEventChanged(val eventId: Long, val title: String, val startsAt: Long) : LifeEvent
 }

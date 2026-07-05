@@ -3,11 +3,17 @@ package com.lifeos.core.database
 import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.RoomDatabase
+import com.lifeos.core.database.calendar.CalendarDao
+import com.lifeos.core.database.calendar.CalendarEventEntity
 import com.lifeos.core.database.capture.CaptureDao
 import com.lifeos.core.database.capture.CaptureEntity
 import com.lifeos.core.database.capture.LogEntryEntity
 import com.lifeos.core.database.capture.LogFormEntity
 import com.lifeos.core.database.capture.TaskEntity
+import com.lifeos.core.database.reminders.ReminderDao
+import com.lifeos.core.database.reminders.ReminderEntity
+import com.lifeos.core.database.todo.TaskListEntity
+import com.lifeos.core.database.todo.TodoDao
 import com.lifeos.core.database.chat.AiConversationEntity
 import com.lifeos.core.database.chat.AiMessageEntity
 import com.lifeos.core.database.chat.ChatDao
@@ -34,12 +40,16 @@ import com.lifeos.core.database.vault.VaultBlobEntity
         NoteEntity::class,
         NoteLinkEntity::class,
         NoteEmbeddingEntity::class,
+        ReminderEntity::class,
+        TaskListEntity::class,
+        CalendarEventEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
+        AutoMigration(from = 3, to = 4),
     ],
 )
 abstract class LifeDatabase : RoomDatabase() {
@@ -47,6 +57,9 @@ abstract class LifeDatabase : RoomDatabase() {
     abstract fun chatDao(): ChatDao
     abstract fun captureDao(): CaptureDao
     abstract fun noteDao(): NoteDao
+    abstract fun reminderDao(): ReminderDao
+    abstract fun todoDao(): TodoDao
+    abstract fun calendarDao(): CalendarDao
 
     companion object {
         const val NAME = "life-os.db"

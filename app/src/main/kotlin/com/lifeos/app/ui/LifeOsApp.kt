@@ -23,11 +23,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.lifeos.app.ui.screen.HomeScreen
 import com.lifeos.app.ui.screen.PlaceholderScreen
+import com.lifeos.app.ui.screen.TasksTabScreen
 import com.lifeos.core.ui.navigation.LifeDestination
 import com.lifeos.core.ui.navigation.TopLevelDestination
+import com.lifeos.feature.calendar.CalendarRoute
 import com.lifeos.feature.capture.LoggerRoute
 import com.lifeos.feature.capture.QuickCaptureSheet
-import com.lifeos.feature.capture.TasksRoute
 import com.lifeos.feature.chat.ChatRoute
 import com.lifeos.feature.notes.NotesRoute
 
@@ -83,13 +84,10 @@ fun LifeOsApp() {
                 HomeScreen(onNavigate = { navController.navigate(it) })
             }
             composable<LifeDestination.Calendar> {
-                PlaceholderScreen(
-                    title = "Calendar",
-                    description = "Month, week, day and agenda views arrive in Phase 3.",
-                )
+                CalendarRoute()
             }
             composable<LifeDestination.Tasks> {
-                TasksRoute()
+                TasksTabScreen()
             }
             composable<LifeDestination.Inbox> {
                 PlaceholderScreen(
