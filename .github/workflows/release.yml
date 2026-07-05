@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest
+
+      - name: Build signed release APK
+        run: ./gradlew :app:assembleRelease
+
+      - name: Rename APK
+        run: cp app/build/outputs/apk/release/app-release.apk lifeos-${{ github.ref_name }}.apk
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: lifeos-${{ github.ref_name }}.apk
+          generate_release_notes: true
+          prerelease: true
+          body: |
+            **LifeOS ${{ github.ref_name }}** — first alpha. Signed sideload APK below.
+
+            Install: `adb install -r -g lifeos-${{ github.ref_name }}.apk` (or copy to the phone and allow *Install unknown apps*).
+
+            See README for module status and NAS-side setup (Ollama, Proton Bridge, Home Assistant).

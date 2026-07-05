@@ -28,7 +28,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lifeos.core.ui.navigation.LifeDestination
+import com.lifeos.feature.planner.PlannerViewModel
 
 private data class AppGridItem(
     val label: String,
@@ -42,7 +46,11 @@ private data class AppGridItem(
  * The ranked card feed and Planner top-card land in Phase 13.
  */
 @Composable
-fun HomeScreen(onNavigate: (LifeDestination) -> Unit) {
+fun HomeScreen(
+    onNavigate: (LifeDestination) -> Unit,
+    plannerViewModel: PlannerViewModel = hiltViewModel(),
+) {
+    val plannerState by plannerViewModel.uiState.collectAsStateWithLifecycle()
     val items = listOf(
         AppGridItem(
             label = "Notes",
@@ -112,6 +120,22 @@ fun HomeScreen(onNavigate: (LifeDestination) -> Unit) {
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
         )
+        // §7.6: the Planner "Next:" top card ([src 40]).
+        plannerState.plan.firstOrNull()?.let { next ->
+            Card(
+                onClick = { onNavigate(LifeDestination.Planner) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 8.dp),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Next", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    Text(next.title, style = MaterialTheme.typography.titleLarge)
+                    Text(next.reason, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 160.dp),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),

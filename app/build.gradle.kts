@@ -11,16 +11,33 @@ android {
     defaultConfig {
         applicationId = "com.lifeos"
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "0.1.0-alpha.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        // S22 Ultra target (§ target device); drops non-arm64 native libs from the APK.
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            // Personal sideload keystore (§9.4): committed on purpose so updates
+            // never wipe the DB/Vault. Not a secret in the Play-Store sense —
+            // this app is never published to a store.
+            storeFile = rootProject.file("release.keystore")
+            storePassword = "lifeos-alpha"
+            keyAlias = "lifeos"
+            keyPassword = "lifeos-alpha"
+        }
     }
 
     buildTypes {
         release {
-            // R8/ProGuard hardening lands in Phase 14 (§9.4); debuggable-free
-            // unminified release keeps early sideload iterations simple.
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
