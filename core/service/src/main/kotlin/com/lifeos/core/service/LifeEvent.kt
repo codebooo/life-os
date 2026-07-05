@@ -18,4 +18,12 @@ sealed interface LifeEvent {
     data class HomeStateChanged(val entityId: String, val state: String) : LifeEvent
     data class ReminderFired(val reminderId: Long, val title: String) : LifeEvent
     data class CalendarEventChanged(val eventId: Long, val title: String, val startsAt: Long) : LifeEvent
+
+    /** A notification captured by the Message Center listener (§Module 7). */
+    data class NotificationPosted(
+        val messageId: Long,
+        val appPackage: String,
+        val title: String?,
+        val text: String?,
+    ) : LifeEvent
 }

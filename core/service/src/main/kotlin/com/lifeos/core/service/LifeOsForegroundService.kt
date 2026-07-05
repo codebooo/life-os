@@ -30,9 +30,13 @@ class LifeOsForegroundService : LifecycleService() {
     @Inject
     lateinit var eventBus: LifeEventBus
 
+    @Inject
+    lateinit var rulesEngine: RulesEngine
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        rulesEngine.start(lifecycleScope)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

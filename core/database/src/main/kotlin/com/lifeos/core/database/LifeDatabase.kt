@@ -17,6 +17,8 @@ import com.lifeos.core.database.todo.TodoDao
 import com.lifeos.core.database.chat.AiConversationEntity
 import com.lifeos.core.database.chat.AiMessageEntity
 import com.lifeos.core.database.chat.ChatDao
+import com.lifeos.core.database.messages.MessageDao
+import com.lifeos.core.database.messages.UnifiedMessageEntity
 import com.lifeos.core.database.notes.NoteDao
 import com.lifeos.core.database.notes.NoteEmbeddingEntity
 import com.lifeos.core.database.notes.NoteEntity
@@ -43,13 +45,15 @@ import com.lifeos.core.database.vault.VaultBlobEntity
         ReminderEntity::class,
         TaskListEntity::class,
         CalendarEventEntity::class,
+        UnifiedMessageEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
         AutoMigration(from = 2, to = 3),
         AutoMigration(from = 3, to = 4),
+        AutoMigration(from = 4, to = 5),
     ],
 )
 abstract class LifeDatabase : RoomDatabase() {
@@ -60,6 +64,7 @@ abstract class LifeDatabase : RoomDatabase() {
     abstract fun reminderDao(): ReminderDao
     abstract fun todoDao(): TodoDao
     abstract fun calendarDao(): CalendarDao
+    abstract fun messageDao(): MessageDao
 
     companion object {
         const val NAME = "life-os.db"

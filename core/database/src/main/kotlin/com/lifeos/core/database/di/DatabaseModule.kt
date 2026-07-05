@@ -6,6 +6,7 @@ import com.lifeos.core.database.LifeDatabase
 import com.lifeos.core.database.calendar.CalendarDao
 import com.lifeos.core.database.capture.CaptureDao
 import com.lifeos.core.database.chat.ChatDao
+import com.lifeos.core.database.messages.MessageDao
 import com.lifeos.core.database.notes.NoteDao
 import com.lifeos.core.database.reminders.ReminderDao
 import com.lifeos.core.database.todo.TodoDao
@@ -47,4 +48,7 @@ internal object DatabaseModule {
 
     @Provides
     fun provideCalendarDao(database: LifeDatabase): CalendarDao = database.calendarDao()
+
+    @Provides
+    fun provideMessageDao(database: LifeDatabase): MessageDao = database.messageDao()
 }

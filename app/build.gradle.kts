@@ -42,6 +42,7 @@ dependencies {
     implementation(projects.feature.reminders)
     implementation(projects.feature.todo)
     implementation(projects.feature.calendar)
+    implementation(projects.feature.messagecenter)
 
     implementation(projects.core.model)
     implementation(projects.core.network)

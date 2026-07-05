@@ -18,7 +18,8 @@ community demand source) in that document.
 | **1 — AI layer + Chat** | `:core:network`, `:core:ai` (Ollama streaming + on-device Gemma + `AiRouter` fallback), `:feature:chat` with streaming UI + engine settings | ✅ done |
 | **2 — Capture spine + Notes + RAG** | Global `QuickCaptureSheet` + AI routing, `:feature:capture` (structured logger, interim tasks), `:feature:notes` (Markdown files, vault option, backlinks), `NotesRag` ask-my-notes | ✅ done |
 | **3 — Time core** | Reminders (exact alarms, full-screen over lockscreen, boot reschedule, NL time), full To-Do (lists + nesting + Inbox), local-first Calendar (month grid, agenda, reminder linking) | ✅ mostly — system-provider/ICS sync, Clock + widgets follow |
-| 4+ | Event bus rules engine, Message Center, DHL, … (§6 of the plan) | ⏳ next |
+| **4 — Rules engine + Message Center** | `RulesEngine` (multibound rules, loop guard) live in the foreground service; notification listener → unified inbox; first end-to-end rule (tracking number → task, with provenance + dedupe) | ✅ done |
+| 5+ | DHL, Image Reasoning, Finance, Email, … (§6 of the plan) | ⏳ next |
 
 ## Project layout
 
@@ -40,6 +41,7 @@ feature/notes         Local-first Markdown notes, backlinks, ask-my-notes (RAG)
 feature/reminders     Exact alarms, full-screen alarm activity, boot reschedule
 feature/todo          Task lists, nesting, capture Inbox
 feature/calendar      Local-first calendar: month grid, agenda, reminder link
+feature/messagecenter Notification listener → unified inbox + tracking-number rule
 build-logic/          Convention plugins (lifeos.android.*, lifeos.hilt, …)
 docs/                 PRODUCTION_PLAN.md — the spec
 ```
