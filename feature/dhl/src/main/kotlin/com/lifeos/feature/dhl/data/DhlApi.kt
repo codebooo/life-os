@@ -33,27 +33,55 @@ class DhlApi @Inject constructor(
     private val dispatchers: DispatcherProvider,
 ) {
 
-    /** GET /track/shipments; requires the user's DHL API key (§9.3). */
-    suspend fun track(trackingNumber: String, apiKey: String): DhlShipment =
+    /**
+     * GET /track/shipments. Unified Tracking authenticates with the API key
+     * header alone; when a secret is present a Basic-auth retry covers the
+     * Parcel DE API family. Errors carry DHL's own detail text so the UI can
+     * show real feedback (fresh keys take up to a few hours to activate).
+     */
+    suspend fun track(trackingNumber: String, apiKey: String, apiSecret: String = ""): DhlShipment =
         withContext(dispatchers.io) {
-            val request = Request.Builder()
-                .url("$BASE_URL/track/shipments?trackingNumber=$trackingNumber")
-                .header("DHL-API-Key", apiKey)
-                .build()
-            okHttpClient.newCall(request).execute().use { response ->
-                when {
-                    response.code == 404 -> DhlShipment(
-                        status = "NOT_FOUND",
-                        statusDescription = "Not in DHL's system yet",
-                        estimatedDeliveryAt = null,
-                        events = emptyList(),
-                    )
-                    !response.isSuccessful ->
-                        throw IOException("DHL API returned HTTP ${response.code}")
-                    else -> parse(response.body.string())
-                }
+            val url = "$BASE_URL/track/shipments?trackingNumber=$trackingNumber"
+            var response = call(
+                Request.Builder().url(url).header("DHL-API-Key", apiKey).build(),
+            )
+            if (response.first == 401 && apiSecret.isNotBlank()) {
+                response = call(
+                    Request.Builder()
+                        .url(url)
+                        .header("DHL-API-Key", apiKey)
+                        .header("Authorization", okhttp3.Credentials.basic(apiKey, apiSecret))
+                        .build(),
+                )
+            }
+            val (code, body) = response
+            when {
+                code == 404 -> DhlShipment(
+                    status = "NOT_FOUND",
+                    statusDescription = "Not in DHL's system yet",
+                    estimatedDeliveryAt = null,
+                    events = emptyList(),
+                )
+                code == 401 -> throw IOException(
+                    "DHL rejected the API key (401). New keys take up to a few hours to " +
+                        "activate — check the app's 'Shipment Tracking - Unified' subscription on developer.dhl.com",
+                )
+                code == 429 -> throw IOException("DHL rate limit hit (429) — try again in a minute")
+                code !in 200..299 -> throw IOException(
+                    "DHL API HTTP $code: ${errorDetail(body) ?: "unexpected response"}",
+                )
+                else -> parse(body)
             }
         }
+
+    private fun call(request: Request): Pair<Int, String> =
+        okHttpClient.newCall(request).execute().use { it.code to it.body.string() }
+
+    private fun errorDetail(body: String): String? = try {
+        json.decodeFromString<ErrorDto>(body).detail
+    } catch (e: Exception) {
+        null
+    }
 
     companion object {
         private const val BASE_URL = "https://api-eu.dhl.com"
@@ -94,6 +122,9 @@ class DhlApi @Inject constructor(
             return null
         }
     }
+
+    @Serializable
+    internal data class ErrorDto(val detail: String? = null)
 
     @Serializable
     internal data class TrackResponse(val shipments: List<ShipmentDto> = emptyList())

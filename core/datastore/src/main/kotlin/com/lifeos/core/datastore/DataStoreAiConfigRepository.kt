@@ -19,6 +19,7 @@ internal class DataStoreAiConfigRepository @Inject constructor(
             ollamaBaseUrl = prefs[KEY_OLLAMA_BASE_URL] ?: "",
             ollamaModel = prefs[KEY_OLLAMA_MODEL] ?: DEFAULT_OLLAMA_MODEL,
             onDeviceModelPath = prefs[KEY_ON_DEVICE_MODEL_PATH] ?: "",
+            hfToken = prefs[KEY_HF_TOKEN] ?: "",
         )
     }
 
@@ -34,10 +35,15 @@ internal class DataStoreAiConfigRepository @Inject constructor(
         dataStore.edit { it[KEY_ON_DEVICE_MODEL_PATH] = path.trim() }
     }
 
+    override suspend fun setHfToken(token: String) {
+        dataStore.edit { it[KEY_HF_TOKEN] = token.trim() }
+    }
+
     private companion object {
         val KEY_OLLAMA_BASE_URL = stringPreferencesKey("ai_ollama_base_url")
         val KEY_OLLAMA_MODEL = stringPreferencesKey("ai_ollama_model")
         val KEY_ON_DEVICE_MODEL_PATH = stringPreferencesKey("ai_on_device_model_path")
+        val KEY_HF_TOKEN = stringPreferencesKey("ai_hf_token")
         const val DEFAULT_OLLAMA_MODEL = "gemma4:12b"
     }
 }

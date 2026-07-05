@@ -1,12 +1,15 @@
 package com.lifeos.feature.chat.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -43,7 +46,8 @@ internal fun AiSettingsSheet(
         Column(
             modifier = Modifier
                 .padding(horizontal = 24.dp)
-                .navigationBarsPadding(),
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text("AI engines", style = MaterialTheme.typography.titleLarge)
@@ -79,6 +83,47 @@ internal fun AiSettingsSheet(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+
+            Text("On-device models", style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(
+                value = uiState.hfToken,
+                onValueChange = { viewModel.onEvent(AiSettingsUiEvent.HfTokenChanged(it)) },
+                label = { Text("Hugging Face token") },
+                supportingText = { Text("Gemma is license-gated: accept it once on huggingface.co, then paste a read token") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            uiState.variants.forEach { variant ->
+                val installed = variant.id in uiState.installedVariantIds
+                val downloading = uiState.downloadingId == variant.id
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(variant.label, style = MaterialTheme.typography.bodyLarge)
+                        if (downloading) {
+                            LinearProgressIndicator(
+                                progress = { uiState.downloadPercent / 100f },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Text("${uiState.downloadPercent}%", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    if (installed) {
+                        OutlinedButton(onClick = { viewModel.onEvent(AiSettingsUiEvent.DeleteModel(variant)) }) {
+                            Text("Delete")
+                        }
+                    } else {
+                        Button(
+                            onClick = { viewModel.onEvent(AiSettingsUiEvent.DownloadModel(variant)) },
+                            enabled = uiState.downloadingId == null,
+                        ) {
+                            Text(if (downloading) "…" else "Download")
+                        }
+                    }
+                }
+            }
 
             uiState.testResult?.let { result ->
                 Text(result, style = MaterialTheme.typography.bodyMedium)

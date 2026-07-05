@@ -28,6 +28,7 @@ data class PackagesUiState(
     val newTrackingNumber: String = "",
     val showKeyEditor: Boolean = false,
     val apiKeyDraft: String = "",
+    val apiSecretDraft: String = "",
     val error: String? = null,
 )
 
@@ -39,6 +40,7 @@ sealed interface PackagesUiEvent {
     data object RefreshAll : PackagesUiEvent
     data object ToggleKeyEditor : PackagesUiEvent
     data class ApiKeyChanged(val value: String) : PackagesUiEvent
+    data class ApiSecretChanged(val value: String) : PackagesUiEvent
     data object SaveApiKey : PackagesUiEvent
     data object DismissError : PackagesUiEvent
 }
@@ -74,7 +76,8 @@ class PackagesViewModel @Inject constructor(
         }
         viewModelScope.launch {
             val key = integrationsRepository.dhlApiKey.first()
-            updateState { it.copy(apiKeyDraft = key) }
+            val secret = integrationsRepository.dhlApiSecret.first()
+            updateState { it.copy(apiKeyDraft = key, apiSecretDraft = secret) }
         }
     }
 
@@ -90,13 +93,16 @@ class PackagesViewModel @Inject constructor(
             }
             PackagesUiEvent.RefreshAll -> viewModelScope.launch {
                 packagesRepository.refreshAllActive()
+                updateState { it.copy(error = "Refreshed") }
             }
             PackagesUiEvent.ToggleKeyEditor ->
                 updateState { it.copy(showKeyEditor = !it.showKeyEditor) }
             is PackagesUiEvent.ApiKeyChanged -> updateState { it.copy(apiKeyDraft = event.value) }
+            is PackagesUiEvent.ApiSecretChanged -> updateState { it.copy(apiSecretDraft = event.value) }
             PackagesUiEvent.SaveApiKey -> viewModelScope.launch {
                 integrationsRepository.setDhlApiKey(uiState.value.apiKeyDraft)
-                updateState { it.copy(showKeyEditor = false) }
+                integrationsRepository.setDhlApiSecret(uiState.value.apiSecretDraft)
+                updateState { it.copy(showKeyEditor = false, error = "DHL credentials saved") }
             }
             PackagesUiEvent.DismissError -> updateState { it.copy(error = null) }
         }

@@ -24,6 +24,7 @@ import androidx.navigation.compose.rememberNavController
 import com.lifeos.app.ui.screen.HomeScreen
 import com.lifeos.app.ui.screen.InboxTabScreen
 import com.lifeos.app.ui.screen.TasksTabScreen
+import com.lifeos.app.ui.settings.SettingsRoute
 import com.lifeos.core.ui.navigation.LifeDestination
 import com.lifeos.core.ui.navigation.TopLevelDestination
 import com.lifeos.feature.calendar.CalendarRoute
@@ -45,17 +46,25 @@ import com.lifeos.feature.smarthome.SmartHomeRoute
  * type-safe NavHost, and the global quick-capture affordance (§7.8).
  */
 @Composable
-fun LifeOsApp() {
+fun LifeOsApp(captureRequests: Int = 0) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     var showQuickCapture by remember { mutableStateOf(false) }
 
+    // Assistant gesture (long-press home) lands here (§Module 10).
+    androidx.compose.runtime.LaunchedEffect(captureRequests) {
+        if (captureRequests > 0) showQuickCapture = true
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         floatingActionButton = {
-            FloatingActionButton(onClick = { showQuickCapture = true }) {
-                Icon(Icons.Filled.Bolt, contentDescription = "Quick capture")
+            // Quick capture lives on Home only; feature screens own their create FABs.
+            if (currentDestination?.hasRoute(LifeDestination.Home::class) == true) {
+                FloatingActionButton(onClick = { showQuickCapture = true }) {
+                    Icon(Icons.Filled.Bolt, contentDescription = "Quick capture")
+                }
             }
         },
         bottomBar = {
@@ -123,6 +132,9 @@ fun LifeOsApp() {
             composable<LifeDestination.Routes> { RouteRoute() }
             composable<LifeDestination.SmartHome> { SmartHomeRoute() }
             composable<LifeDestination.Planner> { PlannerRoute() }
+            composable<LifeDestination.Settings> {
+                SettingsRoute(onBack = { navController.popBackStack() })
+            }
         }
     }
 
