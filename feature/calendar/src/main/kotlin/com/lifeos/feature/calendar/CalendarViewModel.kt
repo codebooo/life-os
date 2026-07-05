@@ -5,6 +5,7 @@ import com.lifeos.core.common.result.LifeResult
 import com.lifeos.core.common.viewmodel.LifeViewModel
 import com.lifeos.core.database.calendar.CalendarEventEntity
 import com.lifeos.feature.calendar.data.CalendarRepository
+import com.lifeos.feature.calendar.data.SystemCalendarMirror
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +41,7 @@ sealed interface CalendarUiEvent {
     data object EditorRemindToggled : CalendarUiEvent
     data object Save : CalendarUiEvent
     data class Delete(val eventId: Long) : CalendarUiEvent
+    data object MirrorToSystem : CalendarUiEvent
     data object DismissError : CalendarUiEvent
 }
 
@@ -49,6 +51,7 @@ sealed interface CalendarUiEffect
 @HiltViewModel
 class CalendarViewModel @Inject constructor(
     private val calendarRepository: CalendarRepository,
+    private val systemCalendarMirror: SystemCalendarMirror,
 ) : LifeViewModel<CalendarUiState, CalendarUiEvent, CalendarUiEffect>(
     CalendarUiState(
         monthStart = startOfMonth(System.currentTimeMillis()),
@@ -87,6 +90,14 @@ class CalendarViewModel @Inject constructor(
             CalendarUiEvent.Save -> save()
             is CalendarUiEvent.Delete -> viewModelScope.launch {
                 calendarRepository.delete(event.eventId)
+            }
+            CalendarUiEvent.MirrorToSystem -> viewModelScope.launch {
+                when (val result = systemCalendarMirror.mirrorAll()) {
+                    is LifeResult.Success -> updateState {
+                        it.copy(error = "Mirrored ${result.value} event(s) to the system calendar")
+                    }
+                    is LifeResult.Failure -> updateState { it.copy(error = result.error.message) }
+                }
             }
             CalendarUiEvent.DismissError -> updateState { it.copy(error = null) }
         }

@@ -41,6 +41,14 @@ import com.lifeos.core.database.notes.NoteEntity
 import com.lifeos.core.database.notes.NoteLinkEntity
 import com.lifeos.core.database.vault.VaultBlobDao
 import com.lifeos.core.database.vault.VaultBlobEntity
+import com.lifeos.core.database.memex.ArchiveItemEntity
+import com.lifeos.core.database.memex.MemexDao
+import com.lifeos.core.database.agentic.MacroDao
+import com.lifeos.core.database.agentic.MacroEntity
+import com.lifeos.core.database.adhd.FocusDao
+import com.lifeos.core.database.adhd.FocusSessionEntity
+import com.lifeos.core.database.evolution.EvolutionDao
+import com.lifeos.core.database.evolution.InteractionLogEntity
 
 /**
  * The single app database (§1.7), feature-partitioned by package with
@@ -72,8 +80,12 @@ import com.lifeos.core.database.vault.VaultBlobEntity
         EmailMessageEntity::class,
         BookEntity::class,
         SavedPlaceEntity::class,
+        ArchiveItemEntity::class,
+        MacroEntity::class,
+        FocusSessionEntity::class,
+        InteractionLogEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -85,6 +97,7 @@ import com.lifeos.core.database.vault.VaultBlobEntity
         AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
+        AutoMigration(from = 10, to = 11),
     ],
 )
 abstract class LifeDatabase : RoomDatabase() {
@@ -102,6 +115,10 @@ abstract class LifeDatabase : RoomDatabase() {
     abstract fun emailDao(): EmailDao
     abstract fun bookDao(): BookDao
     abstract fun routeDao(): RouteDao
+    abstract fun memexDao(): MemexDao
+    abstract fun macroDao(): MacroDao
+    abstract fun focusDao(): FocusDao
+    abstract fun evolutionDao(): EvolutionDao
 
     companion object {
         const val NAME = "life-os.db"

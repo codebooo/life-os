@@ -29,8 +29,26 @@ internal class DataStoreSettingsRepository @Inject constructor(
         dataStore.edit { prefs -> prefs[KEY_THEME_PALETTE] = palette }
     }
 
+    override val worldClocks: Flow<List<String>> =
+        dataStore.data.map { prefs ->
+            prefs[KEY_WORLD_CLOCKS]?.split('|')?.filter { it.isNotBlank() } ?: emptyList()
+        }
+
+    override suspend fun setWorldClocks(zoneIds: List<String>) {
+        dataStore.edit { prefs -> prefs[KEY_WORLD_CLOCKS] = zoneIds.joinToString("|") }
+    }
+
+    override val calendarMirror: Flow<Boolean> =
+        dataStore.data.map { prefs -> prefs[KEY_CALENDAR_MIRROR] ?: false }
+
+    override suspend fun setCalendarMirror(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[KEY_CALENDAR_MIRROR] = enabled }
+    }
+
     private companion object {
         val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val KEY_THEME_PALETTE = stringPreferencesKey("theme_palette")
+        val KEY_WORLD_CLOCKS = stringPreferencesKey("world_clocks")
+        val KEY_CALENDAR_MIRROR = booleanPreferencesKey("calendar_mirror")
     }
 }

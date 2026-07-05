@@ -7,7 +7,7 @@ or on your own NAS (Ollama). No third-party cloud, ever.
 **Spec:** [`docs/PRODUCTION_PLAN.md`](docs/PRODUCTION_PLAN.md). Every module
 and rule traces back to a section (and often a community demand source) there.
 
-## Status — v0.1.0-alpha.3
+## Status — v0.1.0-alpha.4
 
 | Area | State |
 |---|---|
@@ -21,14 +21,21 @@ and rule traces back to a section (and often a community demand source) there.
 | DHL tracking (hourly polling), Scan (CameraX+ML Kit receipts/boards), Finance (budget, subscriptions, warranties, CSV import) | ✅ |
 | Books, Routes, Smart Home (HA REST), NAS browser + server-apps board, Planner "Jarvis" + Home top card | ✅ |
 | Assistant role (long-press home → quick capture), Settings hub, theme palette picker, in-app Gemma model downloads | ✅ |
-| Deferred post-alpha: Clock faces + Glance widgets, system-calendar/ICS mirror, Proton MCP primary mail path, Agentic accessibility macros + NL compiler, Memex archive, Evolution layer, ADHD overlay, HA WebSocket/zones, Vault UI, first-run onboarding checklist (grants live in Settings → System access), FinTS bank sync | 🔜 |
+| Clock (analog/digital/word faces, world clock, stopwatch, timer) | ✅ |
+| ADHD tools: visual focus timer, streaks, overwhelm "What's next?" overlay (SYSTEM_ALERT_WINDOW) | ✅ |
+| Memex archive: share-sheet clip + timeline, annotate-to-keep, 12-month auto-purge | ✅ |
+| Agentic macros: natural-language → validated IR (MacroCompiler) → accessibility executor, dry-run gated | ✅ |
+| Evolution layer: on-device interaction log + planner accept-rate; Planner accept/skip feeds it | ✅ |
+| Calendar: one-way system Calendar Provider mirror + iCalendar (RFC 5545) codec (Proton ICS bridge, §8.6) | ✅ |
+| Mail MCP client (JSON-RPC over HTTP/SSE) for the NAS Proton mail MCP; IMAP fallback stays primary | ✅ |
+| Deferred post-alpha: Glance home-screen widgets, HA WebSocket live state/zones, Vault unlock UI, first-run onboarding checklist (grants live in Settings → System access), FinTS bank sync | 🔜 |
 
 ## Install (alpha)
 
 Grab `lifeos-v*.apk` from [Releases](../../releases), then:
 
 ```
-adb install -r -g lifeos-v0.1.0-alpha.3.apk
+adb install -r -g lifeos-v0.1.0-alpha.4.apk
 ```
 
 or copy to the phone and allow *Install unknown apps*. Android 13+ (minSdk 33).
@@ -55,7 +62,8 @@ stable key so updates never wipe the DB/Vault — §9.4).
 app/                   Shell: theme, bottom bar, NavHost, Home grid + planner card
 core/{model,common,designsystem,database,datastore,network,ai,service,vault,ui}
 feature/{chat,capture,notes,reminders,todo,calendar,messagecenter,dhl,
-         imagereasoning,finance,email,nas,books,route,smarthome,planner}
+         imagereasoning,finance,email,nas,books,route,smarthome,planner,
+         clock,adhd,memex,agentic,evolution}
 build-logic/           Convention plugins
 docs/PRODUCTION_PLAN.md
 ```

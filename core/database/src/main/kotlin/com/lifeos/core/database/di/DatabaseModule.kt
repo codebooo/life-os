@@ -17,6 +17,10 @@ import com.lifeos.core.database.scan.ScanDao
 import com.lifeos.core.database.reminders.ReminderDao
 import com.lifeos.core.database.todo.TodoDao
 import com.lifeos.core.database.vault.VaultBlobDao
+import com.lifeos.core.database.memex.MemexDao
+import com.lifeos.core.database.agentic.MacroDao
+import com.lifeos.core.database.adhd.FocusDao
+import com.lifeos.core.database.evolution.EvolutionDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -75,4 +79,16 @@ internal object DatabaseModule {
 
     @Provides
     fun provideRouteDao(database: LifeDatabase): RouteDao = database.routeDao()
+
+    @Provides
+    fun provideMemexDao(database: LifeDatabase): MemexDao = database.memexDao()
+
+    @Provides
+    fun provideMacroDao(database: LifeDatabase): MacroDao = database.macroDao()
+
+    @Provides
+    fun provideFocusDao(database: LifeDatabase): FocusDao = database.focusDao()
+
+    @Provides
+    fun provideEvolutionDao(database: LifeDatabase): EvolutionDao = database.evolutionDao()
 }

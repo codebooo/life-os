@@ -1,12 +1,15 @@
 package com.lifeos.feature.planner
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
@@ -27,6 +30,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.lifeos.core.database.evolution.EvolutionDao
+import com.lifeos.core.database.evolution.InteractionLogEntity
 import com.lifeos.core.designsystem.component.EmptyState
 import com.lifeos.feature.planner.data.PlanItem
 import com.lifeos.feature.planner.data.PlannerEngine
@@ -45,6 +50,7 @@ data class PlannerUiState(
 @HiltViewModel
 class PlannerViewModel @Inject constructor(
     private val plannerEngine: PlannerEngine,
+    private val evolutionDao: EvolutionDao,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlannerUiState())
@@ -61,6 +67,21 @@ class PlannerViewModel @Inject constructor(
             _uiState.value = PlannerUiState(computing = false, plan = plan)
             _uiState.value = _uiState.value.copy(rationale = plannerEngine.rationale(plan))
         }
+    }
+
+    /** Acceptance signal feeds the evolution layer (§Module 13). */
+    fun resolve(item: PlanItem, accepted: Boolean) {
+        viewModelScope.launch {
+            evolutionDao.insert(
+                InteractionLogEntity(
+                    engine = "ON_DEVICE",
+                    kind = "PLANNER",
+                    accepted = accepted,
+                    at = System.currentTimeMillis(),
+                ),
+            )
+        }
+        _uiState.value = _uiState.value.copy(plan = _uiState.value.plan - item)
     }
 }
 
@@ -113,6 +134,20 @@ fun PlannerRoute(viewModel: PlannerViewModel = hiltViewModel()) {
                             supportingContent = { Text(item.reason) },
                             leadingContent = {
                                 AssistChip(onClick = {}, label = { Text(item.module.name.lowercase()) })
+                            },
+                            trailingContent = {
+                                Row {
+                                    IconButton(onClick = { viewModel.resolve(item, accepted = true) }) {
+                                        Icon(
+                                            Icons.Filled.Check,
+                                            contentDescription = "On it",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                    IconButton(onClick = { viewModel.resolve(item, accepted = false) }) {
+                                        Icon(Icons.Filled.Close, contentDescription = "Skip")
+                                    }
+                                }
                             },
                         )
                     }
