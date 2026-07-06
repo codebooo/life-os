@@ -51,11 +51,21 @@ import com.lifeos.feature.smarthome.SmartHomeRoute
  * type-safe NavHost, and the global quick-capture affordance (§7.8).
  */
 @Composable
-fun LifeOsApp(captureRequests: Int = 0) {
+fun LifeOsApp(captureRequests: Int = 0, navBarIds: List<String> = emptyList()) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
     var showQuickCapture by remember { mutableStateOf(false) }
+
+    // Customizable bottom bar (§Settings): Home is always pinned first.
+    val barItems = remember(navBarIds) {
+        if (navBarIds.isEmpty()) {
+            TopLevelDestination.entries.toList()
+        } else {
+            listOf(TopLevelDestination.HOME) +
+                TopLevelDestination.entries.filter { it != TopLevelDestination.HOME && it.name in navBarIds }
+        }
+    }
 
     // Assistant gesture (long-press home) lands here (§Module 10).
     androidx.compose.runtime.LaunchedEffect(captureRequests) {
@@ -66,7 +76,11 @@ fun LifeOsApp(captureRequests: Int = 0) {
         modifier = Modifier.fillMaxSize(),
         floatingActionButton = {
             // Quick capture lives on Home only; feature screens own their create FABs.
-            if (currentDestination?.hasRoute(LifeDestination.Home::class) == true) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = currentDestination?.hasRoute(LifeDestination.Home::class) == true,
+                enter = androidx.compose.animation.scaleIn() + androidx.compose.animation.fadeIn(),
+                exit = androidx.compose.animation.scaleOut() + androidx.compose.animation.fadeOut(),
+            ) {
                 FloatingActionButton(onClick = { showQuickCapture = true }) {
                     Icon(Icons.Filled.Bolt, contentDescription = "Quick capture")
                 }
@@ -74,7 +88,7 @@ fun LifeOsApp(captureRequests: Int = 0) {
         },
         bottomBar = {
             NavigationBar {
-                TopLevelDestination.entries.forEach { destination ->
+                barItems.forEach { destination ->
                     val selected = currentDestination?.hasRoute(destination.route::class) == true
                     NavigationBarItem(
                         selected = selected,
@@ -103,6 +117,23 @@ fun LifeOsApp(captureRequests: Int = 0) {
             navController = navController,
             startDestination = LifeDestination.Home,
             modifier = Modifier.padding(innerPadding),
+            // Gentle shared-axis feel (§7 motion): quick fade + small vertical lift.
+            enterTransition = {
+                androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
+                    androidx.compose.animation.slideInVertically(
+                        animationSpec = androidx.compose.animation.core.tween(220),
+                        initialOffsetY = { it / 24 },
+                    )
+            },
+            exitTransition = { androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(140)) },
+            popEnterTransition = { androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) },
+            popExitTransition = {
+                androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(140)) +
+                    androidx.compose.animation.slideOutVertically(
+                        animationSpec = androidx.compose.animation.core.tween(140),
+                        targetOffsetY = { it / 24 },
+                    )
+            },
         ) {
             composable<LifeDestination.Home> {
                 HomeScreen(onNavigate = { navController.navigate(it) })

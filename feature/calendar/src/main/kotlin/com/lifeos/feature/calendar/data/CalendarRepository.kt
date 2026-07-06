@@ -41,7 +41,24 @@ interface CalendarRepository {
         remindMinutesBefore: Int? = null,
     ): LifeResult<Long>
 
+    /** Edits an existing event in place. */
+    suspend fun update(
+        eventId: Long,
+        title: String,
+        startsAt: Long,
+        endsAt: Long,
+        location: String?,
+        notes: String?,
+        allDay: Boolean,
+    ): LifeResult<Unit>
+
     suspend fun delete(eventId: Long)
+
+    /** Imports parsed ICS events, deduping on (title, startsAt); returns how many were new. */
+    suspend fun importParsed(events: List<IcsCodec.ParsedEvent>): LifeResult<Int>
+
+    /** The whole local calendar as an RFC 5545 document (Proton ICS bridge, §8.6). */
+    suspend fun exportIcs(): String
 }
 
 @Singleton
@@ -124,7 +141,66 @@ internal class DefaultCalendarRepository @Inject constructor(
         }
     }
 
+    override suspend fun update(
+        eventId: Long,
+        title: String,
+        startsAt: Long,
+        endsAt: Long,
+        location: String?,
+        notes: String?,
+        allDay: Boolean,
+    ): LifeResult<Unit> = withContext(dispatchers.io) {
+        runCatchingLife {
+            val existing = calendarDao.getById(eventId) ?: error("Event not found")
+            calendarDao.update(
+                existing.copy(
+                    title = title,
+                    startsAt = startsAt,
+                    endsAt = endsAt,
+                    location = location,
+                    notes = notes,
+                    allDay = allDay,
+                    updatedAt = System.currentTimeMillis(),
+                ),
+            )
+            eventBus.tryPublish(
+                LifeEvent.CalendarEventChanged(eventId, title, startsAt, hasLocation = location != null),
+            )
+            Unit
+        }
+    }
+
     override suspend fun delete(eventId: Long) = withContext(dispatchers.io) {
         calendarDao.delete(eventId)
+    }
+
+    override suspend fun importParsed(events: List<IcsCodec.ParsedEvent>): LifeResult<Int> =
+        withContext(dispatchers.io) {
+            runCatchingLife {
+                val existing = calendarDao.allEvents().map { it.title to it.startsAt }.toSet()
+                val now = System.currentTimeMillis()
+                var imported = 0
+                events.forEach { event ->
+                    if ((event.title to event.startsAt) !in existing) {
+                        calendarDao.insert(
+                            CalendarEventEntity(
+                                title = event.title,
+                                location = event.location,
+                                notes = event.notes,
+                                startsAt = event.startsAt,
+                                endsAt = event.endsAt,
+                                createdAt = now,
+                                updatedAt = now,
+                            ),
+                        )
+                        imported++
+                    }
+                }
+                imported
+            }
+        }
+
+    override suspend fun exportIcs(): String = withContext(dispatchers.io) {
+        IcsCodec.export(calendarDao.allEvents())
     }
 }

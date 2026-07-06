@@ -23,4 +23,24 @@ interface SettingsRepository {
     val calendarMirror: Flow<Boolean>
 
     suspend fun setCalendarMirror(enabled: Boolean)
+
+    /** Ordered bottom-bar tab ids (HOME always first); empty = default set. */
+    val navBarItems: Flow<List<String>>
+
+    suspend fun setNavBarItems(ids: List<String>)
+
+    /** Home layout: false = grid (default), true = list. */
+    val homeListLayout: Flow<Boolean>
+
+    suspend fun setHomeListLayout(list: Boolean)
+
+    /** Planner items the user dismissed ("MODULE-entityId" keys). */
+    val plannerDismissed: Flow<Set<String>>
+
+    suspend fun addPlannerDismissed(key: String)
+
+    /** Proton Full-view ICS subscription URL (§8.6); empty = not configured. */
+    val protonIcsUrl: Flow<String>
+
+    suspend fun setProtonIcsUrl(url: String)
 }

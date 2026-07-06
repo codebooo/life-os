@@ -7,7 +7,7 @@ or on your own NAS (Ollama). No third-party cloud, ever.
 **Spec:** [`docs/PRODUCTION_PLAN.md`](docs/PRODUCTION_PLAN.md). Every module
 and rule traces back to a section (and often a community demand source) there.
 
-## Status — v0.1.0-alpha.5
+## Status — v0.1.0-alpha.6
 
 | Area | State |
 |---|---|
@@ -22,7 +22,12 @@ and rule traces back to a section (and often a community demand source) there.
 | Books, Routes, Smart Home (HA REST), NAS browser + server-apps board, Planner "Jarvis" + Home top card | ✅ |
 | Assistant role (long-press home → quick capture), Settings hub, theme palette picker, in-app Gemma model downloads | ✅ |
 | Power-button capture auto-detects timers ("timer 6m"), reminders, calendar events, and time-stamped to-dos ("6pm feed cat") on-device | ✅ |
-| Time-stamped to-dos surface in the Calendar; Clock has a Samsung-style wheel timer (mm:ss↔seconds toggle) + stopwatch laps; Routes embeds an interactive OpenStreetMap | ✅ |
+| Time-stamped to-dos surface in the Calendar; Clock has a Samsung-style wheel timer (mm:ss↔seconds toggle) + stopwatch laps; Routes embeds a native osmdroid OpenStreetMap | ✅ |
+| Calendar v2: Month/Week/Day views, hour timeline, tap-to-edit, all-day + minute precision, Proton ICS one-way sync + .ics export | ✅ |
+| Offline voice via open-source Vosk (one-time 40 MB model) — the Google recognizer is gone; nav hand-offs use plain geo: URIs | ✅ |
+| Customizable bottom bar + Home grid/list toggle; planner accept/skip persists (✓ completes the to-do); reminder alarms use a loud alarm-stream channel | ✅ |
+
+**Google-free by design:** no Google service is ever called at runtime (no Play Services, no Google recognizer, no Google Maps). Remaining Google-*authored* open-source, fully on-device libraries: AndroidX/Jetpack (unavoidable on Android), MediaPipe (Gemma inference), ML Kit on-device OCR/barcode (no network) — swap candidates documented in the plan.
 | Clock (analog/digital/word faces, world clock, stopwatch, timer) | ✅ |
 | ADHD tools: visual focus timer, streaks, overwhelm "What's next?" overlay (SYSTEM_ALERT_WINDOW) | ✅ |
 | Memex archive: share-sheet clip + timeline, annotate-to-keep, 12-month auto-purge | ✅ |
@@ -37,7 +42,7 @@ and rule traces back to a section (and often a community demand source) there.
 Grab `lifeos-v*.apk` from [Releases](../../releases), then:
 
 ```
-adb install -r -g lifeos-v0.1.0-alpha.5.apk
+adb install -r -g lifeos-v0.1.0-alpha.6.apk
 ```
 
 or copy to the phone and allow *Install unknown apps*. Android 13+ (minSdk 33).

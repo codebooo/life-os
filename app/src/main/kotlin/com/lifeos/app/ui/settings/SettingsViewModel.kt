@@ -18,6 +18,8 @@ data class SettingsUiState(
     val dhlApiKey: String = "",
     val dhlApiSecret: String = "",
     val themePalette: String = "dynamic",
+    /** Bottom-bar tab ids currently enabled (Home is always pinned). */
+    val navBarItems: List<String> = emptyList(),
     val versionName: String = BuildConfig.VERSION_NAME,
     val message: String? = null,
 )
@@ -29,6 +31,7 @@ sealed interface SettingsUiEvent {
     data class DhlKeyChanged(val value: String) : SettingsUiEvent
     data class DhlSecretChanged(val value: String) : SettingsUiEvent
     data class ThemePaletteChanged(val value: String) : SettingsUiEvent
+    data class ToggleNavItem(val id: String) : SettingsUiEvent
     data object Save : SettingsUiEvent
     data object DismissMessage : SettingsUiEvent
 }
@@ -48,6 +51,8 @@ class SettingsViewModel @Inject constructor(
             val dhlKey = integrationsRepository.dhlApiKey.first()
             val dhlSecret = integrationsRepository.dhlApiSecret.first()
             val palette = settingsRepository.themePalette.first()
+            val navItems = settingsRepository.navBarItems.first()
+                .ifEmpty { listOf("CALENDAR", "TASKS", "INBOX", "ASSISTANT") }
             updateState {
                 it.copy(
                     ollamaBaseUrl = ai.ollamaBaseUrl,
@@ -56,6 +61,7 @@ class SettingsViewModel @Inject constructor(
                     dhlApiKey = dhlKey,
                     dhlApiSecret = dhlSecret,
                     themePalette = palette,
+                    navBarItems = navItems,
                 )
             }
         }
@@ -72,6 +78,13 @@ class SettingsViewModel @Inject constructor(
                 // Theme applies instantly; no Save button involved.
                 updateState { it.copy(themePalette = event.value) }
                 viewModelScope.launch { settingsRepository.setThemePalette(event.value) }
+            }
+            is SettingsUiEvent.ToggleNavItem -> {
+                val current = uiState.value.navBarItems
+                val next = if (event.id in current) current - event.id else current + event.id
+                if (next.isEmpty()) return // at least one tab besides Home
+                updateState { it.copy(navBarItems = next) }
+                viewModelScope.launch { settingsRepository.setNavBarItems(next) }
             }
             SettingsUiEvent.Save -> viewModelScope.launch {
                 val state = uiState.value

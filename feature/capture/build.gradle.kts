@@ -17,5 +17,8 @@ dependencies {
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.okhttp)
+    // Open-source offline speech recognition — replaces the Google recognizer (§9.3 privacy).
+    implementation(libs.vosk.android)
     testImplementation(libs.turbine)
 }

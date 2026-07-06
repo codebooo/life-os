@@ -43,8 +43,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             val palette by settingsRepository.themePalette
                 .collectAsStateWithLifecycle(initialValue = PALETTE_DYNAMIC)
+            val navBarIds by settingsRepository.navBarItems
+                .collectAsStateWithLifecycle(initialValue = emptyList())
             LifeOsTheme(palette = palette) {
-                LifeOsApp(captureRequests = captureRequests.value)
+                LifeOsApp(captureRequests = captureRequests.value, navBarIds = navBarIds)
             }
         }
     }

@@ -32,7 +32,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lifeos.core.database.evolution.EvolutionDao
 import com.lifeos.core.database.evolution.InteractionLogEntity
+import com.lifeos.core.database.todo.TodoDao
+import com.lifeos.core.datastore.SettingsRepository
 import com.lifeos.core.designsystem.component.EmptyState
+import com.lifeos.core.model.LifeModule
 import com.lifeos.feature.planner.data.PlanItem
 import com.lifeos.feature.planner.data.PlannerEngine
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -51,6 +54,8 @@ data class PlannerUiState(
 class PlannerViewModel @Inject constructor(
     private val plannerEngine: PlannerEngine,
     private val evolutionDao: EvolutionDao,
+    private val todoDao: TodoDao,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlannerUiState())
@@ -69,9 +74,18 @@ class PlannerViewModel @Inject constructor(
         }
     }
 
-    /** Acceptance signal feeds the evolution layer (§Module 13). */
+    /**
+     * ✓ completes the underlying to-do (persists on its own); everything else
+     * lands in the dismissed set so it never resurfaces. Both feed the
+     * evolution layer (§Module 13).
+     */
     fun resolve(item: PlanItem, accepted: Boolean) {
         viewModelScope.launch {
+            if (accepted && item.module == LifeModule.TODO) {
+                todoDao.setDone(item.entityId, done = true)
+            } else {
+                settingsRepository.addPlannerDismissed("${item.module}-${item.entityId}")
+            }
             evolutionDao.insert(
                 InteractionLogEntity(
                     engine = "ON_DEVICE",

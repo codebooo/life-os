@@ -21,5 +21,6 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.osmdroid)
     testImplementation(libs.turbine)
 }

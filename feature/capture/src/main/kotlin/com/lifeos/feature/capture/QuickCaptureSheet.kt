@@ -1,9 +1,10 @@
 package com.lifeos.feature.capture
 
-import android.content.Intent
-import android.speech.RecognizerIntent
+import android.Manifest
+import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -60,13 +61,14 @@ fun QuickCaptureSheet(
     viewModel: QuickCaptureViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
-    val voiceLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult(),
-    ) { result ->
-        result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            ?.firstOrNull()
-            ?.let { viewModel.onEvent(QuickCaptureUiEvent.VoiceResult(it)) }
+    // Offline Vosk mic (§9.3): only the RECORD_AUDIO grant is needed — audio
+    // is transcribed on-device, never by a Google service.
+    val micPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) viewModel.onEvent(QuickCaptureUiEvent.MicTapped)
     }
 
     LaunchedEffect(Unit) {
@@ -96,24 +98,21 @@ fun QuickCaptureSheet(
                 value = uiState.input,
                 onValueChange = { viewModel.onEvent(QuickCaptureUiEvent.InputChanged(it)) },
                 placeholder = { Text("A thought, a task, a number to log…") },
-                trailingIcon = if (uiState.classifying) {
+                trailingIcon = if (uiState.classifying || uiState.listening) {
                     { CircularProgressIndicator(modifier = Modifier.padding(8.dp), strokeWidth = 2.dp) }
                 } else {
                     {
                         IconButton(onClick = {
                             // Brain-dump path ([src 16]): speak freely, review the split.
-                            voiceLauncher.launch(
-                                Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                                    putExtra(
-                                        RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                                        RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
-                                    )
-                                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-                                    putExtra(RecognizerIntent.EXTRA_PROMPT, "Just get it out of your head")
-                                },
-                            )
+                            if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                                PackageManager.PERMISSION_GRANTED
+                            ) {
+                                viewModel.onEvent(QuickCaptureUiEvent.MicTapped)
+                            } else {
+                                micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                            }
                         }) {
-                            Icon(Icons.Filled.Mic, contentDescription = "Voice brain-dump")
+                            Icon(Icons.Filled.Mic, contentDescription = "Voice brain-dump (offline)")
                         }
                     }
                 },
@@ -124,6 +123,44 @@ fun QuickCaptureSheet(
 
             uiState.error?.let { error ->
                 Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+
+            if (uiState.listening) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text("Listening… speak, then pause.", style = MaterialTheme.typography.bodyMedium)
+                    Button(onClick = { viewModel.onEvent(QuickCaptureUiEvent.StopListening) }) {
+                        Text("Done")
+                    }
+                }
+            }
+            uiState.voiceDownloadProgress?.let { progress ->
+                Text(
+                    "Downloading offline voice model… $progress%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (uiState.voiceModelPrompt) {
+                Card {
+                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Voice input runs fully offline (open-source Vosk — no Google). " +
+                                "One-time model download, ~40 MB.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { viewModel.onEvent(QuickCaptureUiEvent.DownloadVoiceModel) }) {
+                                Text("Download")
+                            }
+                            Button(onClick = { viewModel.onEvent(QuickCaptureUiEvent.DismissVoicePrompt) }) {
+                                Text("Not now")
+                            }
+                        }
+                    }
+                }
             }
 
             if (uiState.dumpItems.isNotEmpty()) {
