@@ -7,7 +7,7 @@ or on your own NAS (Ollama). No third-party cloud, ever.
 **Spec:** [`docs/PRODUCTION_PLAN.md`](docs/PRODUCTION_PLAN.md). Every module
 and rule traces back to a section (and often a community demand source) there.
 
-## Status — v0.1.0-alpha.4
+## Status — v0.1.0-alpha.5
 
 | Area | State |
 |---|---|
@@ -21,6 +21,8 @@ and rule traces back to a section (and often a community demand source) there.
 | DHL tracking (hourly polling), Scan (CameraX+ML Kit receipts/boards), Finance (budget, subscriptions, warranties, CSV import) | ✅ |
 | Books, Routes, Smart Home (HA REST), NAS browser + server-apps board, Planner "Jarvis" + Home top card | ✅ |
 | Assistant role (long-press home → quick capture), Settings hub, theme palette picker, in-app Gemma model downloads | ✅ |
+| Power-button capture auto-detects timers ("timer 6m"), reminders, calendar events, and time-stamped to-dos ("6pm feed cat") on-device | ✅ |
+| Time-stamped to-dos surface in the Calendar; Clock has a Samsung-style wheel timer (mm:ss↔seconds toggle) + stopwatch laps; Routes embeds an interactive OpenStreetMap | ✅ |
 | Clock (analog/digital/word faces, world clock, stopwatch, timer) | ✅ |
 | ADHD tools: visual focus timer, streaks, overwhelm "What's next?" overlay (SYSTEM_ALERT_WINDOW) | ✅ |
 | Memex archive: share-sheet clip + timeline, annotate-to-keep, 12-month auto-purge | ✅ |
@@ -35,7 +37,7 @@ and rule traces back to a section (and often a community demand source) there.
 Grab `lifeos-v*.apk` from [Releases](../../releases), then:
 
 ```
-adb install -r -g lifeos-v0.1.0-alpha.4.apk
+adb install -r -g lifeos-v0.1.0-alpha.5.apk
 ```
 
 or copy to the phone and allow *Install unknown apps*. Android 13+ (minSdk 33).

@@ -6,6 +6,7 @@ import com.lifeos.core.common.result.getOrNull
 import com.lifeos.core.common.result.runCatchingLife
 import com.lifeos.core.database.calendar.CalendarDao
 import com.lifeos.core.database.calendar.CalendarEventEntity
+import com.lifeos.core.database.capture.CaptureDao
 import com.lifeos.core.model.LifeModule
 import com.lifeos.core.model.SourceRef
 import com.lifeos.core.service.LifeAction
@@ -13,6 +14,7 @@ import com.lifeos.core.service.LifeActionDispatcher
 import com.lifeos.core.service.LifeEvent
 import com.lifeos.core.service.LifeEventBus
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -45,13 +47,32 @@ interface CalendarRepository {
 @Singleton
 internal class DefaultCalendarRepository @Inject constructor(
     private val calendarDao: CalendarDao,
+    private val captureDao: CaptureDao,
     private val actionDispatcher: dagger.Lazy<LifeActionDispatcher>,
     private val eventBus: LifeEventBus,
     private val dispatchers: DispatcherProvider,
 ) : CalendarRepository {
 
     override fun observeWindow(windowStart: Long, windowEnd: Long): Flow<List<CalendarEventEntity>> =
-        calendarDao.observeWindow(windowStart, windowEnd)
+        combine(
+            calendarDao.observeWindow(windowStart, windowEnd),
+            captureDao.observeTimedTasks(windowStart, windowEnd),
+        ) { events, tasks ->
+            // Time-stamped to-dos appear as read-only entries (negative id marks them).
+            val taskEvents = tasks.map { task ->
+                CalendarEventEntity(
+                    id = -task.id,
+                    title = "☑ ${task.title}",
+                    location = null,
+                    notes = null,
+                    startsAt = task.dueAt ?: 0L,
+                    endsAt = (task.dueAt ?: 0L) + 30 * 60_000L,
+                    createdAt = task.createdAt,
+                    updatedAt = task.createdAt,
+                )
+            }
+            (events + taskEvents).sortedBy { it.startsAt }
+        }
 
     override fun observeUpcoming(): Flow<List<CalendarEventEntity>> =
         calendarDao.observeUpcoming(System.currentTimeMillis())

@@ -2,12 +2,16 @@ package com.lifeos.feature.route
 
 import android.content.Intent
 import android.net.Uri
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -107,13 +111,19 @@ fun RouteRoute(viewModel: RouteViewModel = hiltViewModel()) {
                 )
                 Button(onClick = viewModel::add) { Text("Save") }
             }
+            OsmMap(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(260.dp)
+                    .padding(16.dp),
+            )
             if (places.isEmpty()) {
                 EmptyState(
                     title = "No saved places",
                     description = "One tap hands navigation to Google Maps or OsmAnd.",
                 )
             } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(modifier = Modifier.fillMaxWidth()) {
                     items(places, key = { it.id }) { place ->
                         ListItem(
                             headlineContent = { Text(place.name) },
@@ -142,3 +152,64 @@ fun RouteRoute(viewModel: RouteViewModel = hiltViewModel()) {
         }
     }
 }
+
+/**
+ * An interactive OpenStreetMap (§Module 17): Leaflet in a WebView, pan/zoom,
+ * long-press to hand the tapped point to the phone's nav app. Needs network —
+ * the only online surface in Routes; everything else is local.
+ */
+@Composable
+private fun OsmMap(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            WebView(ctx).apply {
+                @Suppress("SetJavaScriptEnabled")
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.setSupportZoom(true)
+                webViewClient = WebViewClient()
+                addJavascriptInterface(
+                    object {
+                        @android.webkit.JavascriptInterface
+                        fun navigateTo(lat: Double, lon: Double) {
+                            context.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    Uri.parse("geo:$lat,$lon?q=$lat,$lon"),
+                                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }
+                    },
+                    "LifeOS",
+                )
+                loadDataWithBaseURL(
+                    "https://www.openstreetmap.org/",
+                    LEAFLET_HTML,
+                    "text/html",
+                    "utf-8",
+                    null,
+                )
+            }
+        },
+    )
+}
+
+private const val LEAFLET_HTML = """
+<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>html,body,#map{height:100%;margin:0}</style></head>
+<body><div id="map"></div><script>
+var map=L.map('map').setView([51.1657,10.4515],5);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+var marker;
+map.on('contextmenu',function(e){
+  if(marker){map.removeLayer(marker);}
+  marker=L.marker(e.latlng).addTo(map);
+  if(window.LifeOS){window.LifeOS.navigateTo(e.latlng.lat,e.latlng.lng);}
+});
+</script></body></html>
+"""

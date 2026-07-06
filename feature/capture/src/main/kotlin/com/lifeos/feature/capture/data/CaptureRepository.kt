@@ -153,11 +153,41 @@ internal class DefaultCaptureRepository @Inject constructor(
                 captureDao.insertTask(
                     TaskEntity(
                         title = pending.suggestion.title,
+                        // Time-stamped to-dos surface in the calendar too (§Module 19).
+                        dueAt = pending.suggestion.at,
                         sourceModule = LifeModule.CAPTURE.name,
                         sourceEntityId = pending.captureId,
                         createdAt = System.currentTimeMillis(),
                     ),
                 ) as Long?
+            }
+            CaptureDestination.REMINDER, CaptureDestination.TIMER -> {
+                val at = pending.suggestion.at
+                if (at == null) {
+                    LifeResult.Failure(LifeError.Validation("No time detected for this reminder"))
+                } else {
+                    val title = if (destination == CaptureDestination.TIMER) {
+                        pending.suggestion.title.ifBlank { "Timer" }
+                    } else {
+                        pending.suggestion.title
+                    }
+                    actionDispatcher.dispatch(LifeAction.CreateReminder(title = title, at = at, source = source))
+                }
+            }
+            CaptureDestination.EVENT -> {
+                val at = pending.suggestion.at
+                if (at == null) {
+                    LifeResult.Failure(LifeError.Validation("No time detected for this event"))
+                } else {
+                    actionDispatcher.dispatch(
+                        LifeAction.CreateCalendarEvent(
+                            title = pending.suggestion.title,
+                            startsAt = at,
+                            endsAt = at + 3_600_000L,
+                            source = source,
+                        ),
+                    )
+                }
             }
             CaptureDestination.LOG -> {
                 val form = pending.suggestion.formName?.let { captureDao.getFormByName(it) }

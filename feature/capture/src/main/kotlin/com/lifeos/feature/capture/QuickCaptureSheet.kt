@@ -15,11 +15,16 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Note
+import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.HourglassEmpty
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -48,7 +53,7 @@ import com.lifeos.feature.capture.data.CaptureDestination
  * make redirecting a single tap. Raw text is already persisted before
  * confirmation — nothing typed here is ever lost.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun QuickCaptureSheet(
     onDismiss: () -> Unit,
@@ -159,27 +164,53 @@ fun QuickCaptureSheet(
                     "Save \"${pending.suggestion.title}\" as:",
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                pending.suggestion.at?.let { at ->
+                    Text(
+                        "⏰ ${formatWhen(at)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                val suggested = pending.suggestion.destination
+                val hasTime = pending.suggestion.at != null
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     DestinationChip(
                         label = "Note",
                         icon = { Icon(Icons.AutoMirrored.Filled.Note, null) },
-                        suggested = pending.suggestion.destination == CaptureDestination.NOTE,
+                        suggested = suggested == CaptureDestination.NOTE,
                         onClick = { viewModel.onEvent(QuickCaptureUiEvent.Confirm(CaptureDestination.NOTE)) },
                     )
                     DestinationChip(
                         label = "Task",
                         icon = { Icon(Icons.Filled.Checklist, null) },
-                        suggested = pending.suggestion.destination == CaptureDestination.TASK,
+                        suggested = suggested == CaptureDestination.TASK,
                         onClick = { viewModel.onEvent(QuickCaptureUiEvent.Confirm(CaptureDestination.TASK)) },
                     )
+                    if (hasTime) {
+                        DestinationChip(
+                            label = "Reminder",
+                            icon = { Icon(Icons.Filled.Alarm, null) },
+                            suggested = suggested == CaptureDestination.REMINDER,
+                            onClick = { viewModel.onEvent(QuickCaptureUiEvent.Confirm(CaptureDestination.REMINDER)) },
+                        )
+                        DestinationChip(
+                            label = "Event",
+                            icon = { Icon(Icons.Filled.Event, null) },
+                            suggested = suggested == CaptureDestination.EVENT,
+                            onClick = { viewModel.onEvent(QuickCaptureUiEvent.Confirm(CaptureDestination.EVENT)) },
+                        )
+                        DestinationChip(
+                            label = "Timer",
+                            icon = { Icon(Icons.Filled.HourglassEmpty, null) },
+                            suggested = suggested == CaptureDestination.TIMER,
+                            onClick = { viewModel.onEvent(QuickCaptureUiEvent.Confirm(CaptureDestination.TIMER)) },
+                        )
+                    }
                     if (pending.suggestion.formName != null) {
                         DestinationChip(
                             label = "Log: ${pending.suggestion.formName}",
                             icon = { Icon(Icons.Filled.Insights, null) },
-                            suggested = pending.suggestion.destination == CaptureDestination.LOG,
+                            suggested = suggested == CaptureDestination.LOG,
                             onClick = { viewModel.onEvent(QuickCaptureUiEvent.Confirm(CaptureDestination.LOG)) },
                         )
                     }
@@ -202,4 +233,15 @@ private fun DestinationChip(
         label = { Text(if (suggested) "$label ✓" else label) },
         leadingIcon = icon,
     )
+}
+
+private fun formatWhen(at: Long): String {
+    val now = System.currentTimeMillis()
+    val deltaMin = (at - now) / 60_000L
+    val clock = java.text.SimpleDateFormat("EEE d MMM, HH:mm", java.util.Locale.getDefault())
+        .format(java.util.Date(at))
+    return when {
+        deltaMin in 0..90 -> "in ${deltaMin} min · $clock"
+        else -> clock
+    }
 }
