@@ -232,8 +232,11 @@ private fun EventRow(event: CalendarEventEntity, onEvent: (CalendarUiEvent) -> U
             )
         },
         trailingContent = {
-            IconButton(onClick = { onEvent(CalendarUiEvent.Delete(event.id)) }) {
-                Icon(Icons.Filled.Delete, contentDescription = "Delete")
+            // Negative id = a to-do surfaced from Tasks; edit it there, not here.
+            if (event.id > 0) {
+                IconButton(onClick = { onEvent(CalendarUiEvent.Delete(event.id)) }) {
+                    Icon(Icons.Filled.Delete, contentDescription = "Delete")
+                }
             }
         },
     )

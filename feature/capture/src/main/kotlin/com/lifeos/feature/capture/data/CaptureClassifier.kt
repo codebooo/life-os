@@ -10,7 +10,7 @@ import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
-enum class CaptureDestination { NOTE, TASK, LOG }
+enum class CaptureDestination { NOTE, TASK, LOG, REMINDER, EVENT, TIMER }
 
 /** The classifier's proposal — always confirmed by the user before writing (R12). */
 data class CaptureSuggestion(
@@ -18,6 +18,8 @@ data class CaptureSuggestion(
     val title: String,
     /** Target log form name when [destination] is LOG. */
     val formName: String? = null,
+    /** Fire/start time for REMINDER/EVENT/TIMER or a time-stamped TASK. */
+    val at: Long? = null,
 )
 
 /**
@@ -32,6 +34,11 @@ class CaptureClassifier @Inject constructor(
 ) {
 
     suspend fun classify(text: String, knownFormNames: List<String>): CaptureSuggestion {
+        // Deterministic time-aware routing wins first: timers/reminders/events/timed
+        // to-dos are far more reliable parsed on-device than guessed by the model.
+        SmartCaptureParser.detect(text)?.let { smart ->
+            return CaptureSuggestion(smart.destination, smart.title, at = smart.at)
+        }
         classifyWithAi(text, knownFormNames)?.let { return it }
         return classifyHeuristically(text, knownFormNames)
     }

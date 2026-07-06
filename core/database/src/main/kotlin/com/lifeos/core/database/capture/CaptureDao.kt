@@ -44,6 +44,10 @@ interface CaptureDao {
     @Query("SELECT * FROM tasks ORDER BY done ASC, createdAt DESC")
     fun observeTasks(): Flow<List<TaskEntity>>
 
+    /** Time-stamped to-dos overlap this window — surfaced in the calendar (§Module 19). */
+    @Query("SELECT * FROM tasks WHERE dueAt IS NOT NULL AND dueAt >= :start AND dueAt < :end ORDER BY dueAt")
+    fun observeTimedTasks(start: Long, end: Long): Flow<List<TaskEntity>>
+
     @Query("UPDATE tasks SET done = :done WHERE id = :taskId")
     suspend fun setTaskDone(taskId: Long, done: Boolean)
 }
