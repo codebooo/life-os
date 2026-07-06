@@ -118,6 +118,27 @@ fun SettingsRoute(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
+            SectionHeader(title = "Navigation bar")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    "CALENDAR" to "Calendar",
+                    "TASKS" to "Tasks",
+                    "INBOX" to "Inbox",
+                    "ASSISTANT" to "Assistant",
+                ).forEach { (id, label) ->
+                    FilterChip(
+                        selected = id in uiState.navBarItems,
+                        onClick = { viewModel.onEvent(SettingsUiEvent.ToggleNavItem(id)) },
+                        label = { Text(label) },
+                    )
+                }
+            }
+            Text(
+                "Pick which tabs sit next to Home. Everything stays reachable from the Home grid.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
             SectionHeader(title = "AI")
             OutlinedTextField(
                 value = uiState.ollamaBaseUrl,
@@ -192,6 +213,19 @@ fun SettingsRoute(
                 subtitle = "Exempt LifeOS so reminders and rules keep running",
             ) {
                 context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
+            if (android.os.Build.VERSION.SDK_INT >= 34) {
+                SystemSettingRow(
+                    title = "Full-screen reminder alarms",
+                    subtitle = "Allow reminders to take over the screen like an alarm clock",
+                ) {
+                    context.startActivity(
+                        Intent(
+                            Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                            android.net.Uri.parse("package:${context.packageName}"),
+                        ),
+                    )
+                }
             }
 
             SectionHeader(title = "About")

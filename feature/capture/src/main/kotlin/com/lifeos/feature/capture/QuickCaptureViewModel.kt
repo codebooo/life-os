@@ -7,6 +7,7 @@ import com.lifeos.feature.capture.data.CaptureDestination
 import com.lifeos.feature.capture.data.CaptureRepository
 import com.lifeos.feature.capture.data.DumpItem
 import com.lifeos.feature.capture.data.PendingCapture
+import com.lifeos.feature.capture.data.VoskTranscriber
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -20,6 +21,11 @@ data class QuickCaptureUiState(
     val dumpCaptureId: Long? = null,
     val dumpItems: List<DumpItem> = emptyList(),
     val dumpSaved: Int = 0,
+    // Offline voice (Vosk, §9.3 — no Google recognizer)
+    val voiceModelReady: Boolean = false,
+    val voiceModelPrompt: Boolean = false,
+    val voiceDownloadProgress: Int? = null,
+    val listening: Boolean = false,
     val error: String? = null,
 )
 
@@ -28,6 +34,10 @@ sealed interface QuickCaptureUiEvent {
     data object Submit : QuickCaptureUiEvent
     data class Confirm(val destination: CaptureDestination) : QuickCaptureUiEvent
     data class VoiceResult(val transcript: String) : QuickCaptureUiEvent
+    data object MicTapped : QuickCaptureUiEvent
+    data object StopListening : QuickCaptureUiEvent
+    data object DownloadVoiceModel : QuickCaptureUiEvent
+    data object DismissVoicePrompt : QuickCaptureUiEvent
     data class ConfirmDumpItem(val index: Int) : QuickCaptureUiEvent
     data class DiscardDumpItem(val index: Int) : QuickCaptureUiEvent
     data object SaveAllDumpItems : QuickCaptureUiEvent
@@ -41,7 +51,12 @@ sealed interface QuickCaptureUiEffect {
 @HiltViewModel
 class QuickCaptureViewModel @Inject constructor(
     private val captureRepository: CaptureRepository,
+    private val voskTranscriber: VoskTranscriber,
 ) : LifeViewModel<QuickCaptureUiState, QuickCaptureUiEvent, QuickCaptureUiEffect>(QuickCaptureUiState()) {
+
+    init {
+        updateState { it.copy(voiceModelReady = voskTranscriber.isModelReady()) }
+    }
 
     override fun onEvent(event: QuickCaptureUiEvent) {
         when (event) {
@@ -49,12 +64,52 @@ class QuickCaptureViewModel @Inject constructor(
             QuickCaptureUiEvent.Submit -> submit()
             is QuickCaptureUiEvent.Confirm -> confirm(event.destination)
             is QuickCaptureUiEvent.VoiceResult -> onVoice(event.transcript)
+            QuickCaptureUiEvent.MicTapped -> onMicTapped()
+            QuickCaptureUiEvent.StopListening -> voskTranscriber.stopListening()
+            QuickCaptureUiEvent.DownloadVoiceModel -> downloadVoiceModel()
+            QuickCaptureUiEvent.DismissVoicePrompt -> updateState { it.copy(voiceModelPrompt = false) }
             is QuickCaptureUiEvent.ConfirmDumpItem -> confirmDump(event.index)
             is QuickCaptureUiEvent.DiscardDumpItem -> updateState {
                 it.copy(dumpItems = it.dumpItems.filterIndexed { i, _ -> i != event.index })
             }
             QuickCaptureUiEvent.SaveAllDumpItems -> saveAllDump()
-            QuickCaptureUiEvent.Reset -> updateState { QuickCaptureUiState() }
+            QuickCaptureUiEvent.Reset -> updateState {
+                QuickCaptureUiState(voiceModelReady = voskTranscriber.isModelReady())
+            }
+        }
+    }
+
+    private fun onMicTapped() {
+        if (!voskTranscriber.isModelReady()) {
+            updateState { it.copy(voiceModelPrompt = true) }
+            return
+        }
+        if (uiState.value.listening) return
+        updateState { it.copy(listening = true, error = null) }
+        viewModelScope.launch {
+            val result = voskTranscriber.listen()
+            updateState { it.copy(listening = false) }
+            when (result) {
+                is LifeResult.Success -> onVoice(result.value)
+                is LifeResult.Failure -> updateState { it.copy(error = result.error.message) }
+            }
+        }
+    }
+
+    private fun downloadVoiceModel() {
+        updateState { it.copy(voiceModelPrompt = false, voiceDownloadProgress = 0) }
+        viewModelScope.launch {
+            val result = voskTranscriber.downloadModel { progress ->
+                updateState { it.copy(voiceDownloadProgress = progress) }
+            }
+            when (result) {
+                is LifeResult.Success -> updateState {
+                    it.copy(voiceDownloadProgress = null, voiceModelReady = true)
+                }
+                is LifeResult.Failure -> updateState {
+                    it.copy(voiceDownloadProgress = null, error = result.error.message)
+                }
+            }
         }
     }
 

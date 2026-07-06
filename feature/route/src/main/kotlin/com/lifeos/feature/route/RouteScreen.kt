@@ -2,8 +2,6 @@ package com.lifeos.feature.route
 
 import android.content.Intent
 import android.net.Uri
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Arrangement
@@ -11,9 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Navigation
@@ -22,6 +20,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -30,8 +29,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -44,6 +45,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import org.osmdroid.config.Configuration
+import org.osmdroid.events.MapEventsReceiver
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.MapEventsOverlay
+import org.osmdroid.views.overlay.Marker
 import javax.inject.Inject
 
 @HiltViewModel
@@ -114,13 +122,20 @@ fun RouteRoute(viewModel: RouteViewModel = hiltViewModel()) {
             OsmMap(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(260.dp)
-                    .padding(16.dp),
+                    .height(280.dp)
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(16.dp)),
+            )
+            Text(
+                "Long-press the map to navigate to that point.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp),
             )
             if (places.isEmpty()) {
                 EmptyState(
                     title = "No saved places",
-                    description = "One tap hands navigation to Google Maps or OsmAnd.",
+                    description = "One tap hands navigation to your maps app (OsmAnd, Organic Maps, …).",
                 )
             } else {
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {
@@ -133,7 +148,7 @@ fun RouteRoute(viewModel: RouteViewModel = hiltViewModel()) {
                                     context.startActivity(
                                         Intent(
                                             Intent.ACTION_VIEW,
-                                            Uri.parse("google.navigation:q=" + Uri.encode(place.query)),
+                                            Uri.parse("geo:0,0?q=" + Uri.encode(place.query)),
                                         ),
                                     )
                                 }) {
@@ -154,9 +169,9 @@ fun RouteRoute(viewModel: RouteViewModel = hiltViewModel()) {
 }
 
 /**
- * An interactive OpenStreetMap (§Module 17): Leaflet in a WebView, pan/zoom,
- * long-press to hand the tapped point to the phone's nav app. Needs network —
- * the only online surface in Routes; everything else is local.
+ * Native OpenStreetMap via osmdroid (§Module 17) — no WebView, no CDN, no
+ * Google. Pan/zoom; long-press drops a marker and hands the point to the
+ * user's navigation app through a plain geo: intent.
  */
 @Composable
 private fun OsmMap(modifier: Modifier = Modifier) {
@@ -164,52 +179,41 @@ private fun OsmMap(modifier: Modifier = Modifier) {
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
-            WebView(ctx).apply {
-                @Suppress("SetJavaScriptEnabled")
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.setSupportZoom(true)
-                webViewClient = WebViewClient()
-                addJavascriptInterface(
-                    object {
-                        @android.webkit.JavascriptInterface
-                        fun navigateTo(lat: Double, lon: Double) {
-                            context.startActivity(
-                                Intent(
-                                    Intent.ACTION_VIEW,
-                                    Uri.parse("geo:$lat,$lon?q=$lat,$lon"),
-                                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                            )
-                        }
-                    },
-                    "LifeOS",
-                )
-                loadDataWithBaseURL(
-                    "https://www.openstreetmap.org/",
-                    LEAFLET_HTML,
-                    "text/html",
-                    "utf-8",
-                    null,
+            Configuration.getInstance().userAgentValue = "LifeOS/0.1 (personal)"
+            Configuration.getInstance().osmdroidBasePath = ctx.cacheDir.resolve("osmdroid")
+            MapView(ctx).apply {
+                setTileSource(TileSourceFactory.MAPNIK)
+                setMultiTouchControls(true)
+                controller.setZoom(6.0)
+                controller.setCenter(GeoPoint(51.1657, 10.4515))
+                overlays.add(
+                    MapEventsOverlay(
+                        object : MapEventsReceiver {
+                            override fun singleTapConfirmedHelper(p: GeoPoint?) = false
+
+                            override fun longPressHelper(p: GeoPoint?): Boolean {
+                                p ?: return false
+                                overlays.removeAll { it is Marker }
+                                overlays.add(
+                                    Marker(this@apply).apply {
+                                        position = p
+                                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                                    },
+                                )
+                                invalidate()
+                                context.startActivity(
+                                    Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse("geo:${p.latitude},${p.longitude}?q=${p.latitude},${p.longitude}"),
+                                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                                return true
+                            }
+                        },
+                    ),
                 )
             }
         },
+        onRelease = { it.onDetach() },
     )
 }
-
-private const val LEAFLET_HTML = """
-<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>html,body,#map{height:100%;margin:0}</style></head>
-<body><div id="map"></div><script>
-var map=L.map('map').setView([51.1657,10.4515],5);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-  {maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
-var marker;
-map.on('contextmenu',function(e){
-  if(marker){map.removeLayer(marker);}
-  marker=L.marker(e.latlng).addTo(map);
-  if(window.LifeOS){window.LifeOS.navigateTo(e.latlng.lat,e.latlng.lng);}
-});
-</script></body></html>
-"""

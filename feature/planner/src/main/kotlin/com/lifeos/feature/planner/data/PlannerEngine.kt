@@ -11,6 +11,7 @@ import com.lifeos.core.database.capture.CaptureDao
 import com.lifeos.core.database.dhl.PackageDao
 import com.lifeos.core.database.finance.FinanceDao
 import com.lifeos.core.database.reminders.ReminderDao
+import com.lifeos.core.datastore.SettingsRepository
 import com.lifeos.core.model.LifeModule
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -41,12 +42,14 @@ class PlannerEngine @Inject constructor(
     private val captureDao: CaptureDao,
     private val packageDao: PackageDao,
     private val financeDao: FinanceDao,
+    private val settingsRepository: SettingsRepository,
     private val aiRouter: AiRouter,
     private val dispatchers: DispatcherProvider,
 ) {
 
     suspend fun computePlan(now: Long = System.currentTimeMillis()): List<PlanItem> =
         withContext(dispatchers.io) {
+            val dismissed = settingsRepository.plannerDismissed.first()
             val items = mutableListOf<PlanItem>()
 
             reminderDao.pendingAfter(now - TimeUnit.DAYS.toMillis(1)).forEach { reminder ->
@@ -112,7 +115,10 @@ class PlannerEngine @Inject constructor(
                 }
             }
 
-            items.sortedByDescending { it.score }.take(12)
+            items
+                .filterNot { "${it.module}-${it.entityId}" in dismissed }
+                .sortedByDescending { it.score }
+                .take(12)
         }
 
     /** One-paragraph on-device rationale for the day; empty when no engine. */

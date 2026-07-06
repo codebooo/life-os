@@ -26,6 +26,10 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Timeline
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.material3.ListItem
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.Card
 import androidx.compose.material3.IconButton
@@ -57,8 +61,12 @@ private data class AppGridItem(
 fun HomeScreen(
     onNavigate: (LifeDestination) -> Unit,
     plannerViewModel: PlannerViewModel = hiltViewModel(),
+    homeViewModel: HomeViewModel = hiltViewModel(),
 ) {
     val plannerState by plannerViewModel.uiState.collectAsStateWithLifecycle()
+    val listLayout by homeViewModel.listLayout.collectAsStateWithLifecycle()
+    // Fresh ranking every time Home comes back into view — never a stale card.
+    androidx.compose.runtime.LaunchedEffect(Unit) { plannerViewModel.recompute() }
     val items = listOf(
         AppGridItem(
             label = "Notes",
@@ -160,8 +168,16 @@ fun HomeScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text("LifeOS", style = MaterialTheme.typography.headlineMedium)
-            IconButton(onClick = { onNavigate(LifeDestination.Settings) }) {
-                Icon(Icons.Filled.Settings, contentDescription = "Settings")
+            Row {
+                IconButton(onClick = { homeViewModel.toggleLayout() }) {
+                    Icon(
+                        if (listLayout) Icons.Filled.GridView else Icons.AutoMirrored.Filled.ViewList,
+                        contentDescription = if (listLayout) "Grid view" else "List view",
+                    )
+                }
+                IconButton(onClick = { onNavigate(LifeDestination.Settings) }) {
+                    Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                }
             }
         }
         // §7.6: the Planner "Next:" top card ([src 40]).
@@ -180,22 +196,44 @@ fun HomeScreen(
                 }
             }
         }
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 160.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            items(items) { item ->
-                Card(onClick = { onNavigate(item.destination) }, modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(item.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Text(item.label, style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            item.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        if (listLayout) {
+            LazyColumn(contentPadding = PaddingValues(vertical = 4.dp)) {
+                items(items.size) { index ->
+                    val item = items[index]
+                    Card(
+                        onClick = { onNavigate(item.destination) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp),
+                    ) {
+                        ListItem(
+                            headlineContent = { Text(item.label) },
+                            supportingContent = { Text(item.description) },
+                            leadingContent = {
+                                Icon(item.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            },
                         )
+                    }
+                }
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = 160.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                items(items) { item ->
+                    Card(onClick = { onNavigate(item.destination) }, modifier = Modifier.fillMaxWidth()) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(item.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Text(item.label, style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                item.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
             }

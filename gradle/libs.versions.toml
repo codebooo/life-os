@@ -21,6 +21,8 @@ work = "2.11.2"
 biometric = "1.1.0"
 glance = "1.1.1"
 okhttp = "5.4.0"
+osmdroid = "6.1.20"
+vosk = "0.3.47"
 tasksGenai = "0.10.35"
 markdownRenderer = "0.41.0"
 camerax = "1.5.3"
@@ -78,6 +80,8 @@ androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx"
 androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 androidx-glance-appwidget = { group = "androidx.glance", name = "glance-appwidget", version.ref = "glance" }
 androidx-glance-material3 = { group = "androidx.glance", name = "glance-material3", version.ref = "glance" }
+osmdroid = { group = "org.osmdroid", name = "osmdroid-android", version.ref = "osmdroid" }
+vosk-android = { group = "com.alphacephei", name = "vosk-android", version.ref = "vosk" }
 
 # Hilt
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "hilt" }
