@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** Home shell prefs: grid vs list layout (§7.6). */
+/** Home shell prefs: grid vs list layout + user-arranged tile order (§7.6). */
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
@@ -19,9 +19,17 @@ class HomeViewModel @Inject constructor(
     val listLayout = settingsRepository.homeListLayout
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
+    val homeOrder = settingsRepository.homeOrder
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     fun toggleLayout() {
         viewModelScope.launch {
             settingsRepository.setHomeListLayout(!settingsRepository.homeListLayout.first())
         }
+    }
+
+    /** Persists a full tile order (called when a drag ends). */
+    fun saveOrder(labels: List<String>) {
+        viewModelScope.launch { settingsRepository.setHomeOrder(labels) }
     }
 }

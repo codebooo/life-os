@@ -43,4 +43,9 @@ interface SettingsRepository {
     val protonIcsUrl: Flow<String>
 
     suspend fun setProtonIcsUrl(url: String)
+
+    /** User-arranged Home tile order (module labels); empty = default order. */
+    val homeOrder: Flow<List<String>>
+
+    suspend fun setHomeOrder(labels: List<String>)
 }

@@ -57,13 +57,16 @@ fun LifeOsApp(captureRequests: Int = 0, navBarIds: List<String> = emptyList()) {
     val currentDestination = backStackEntry?.destination
     var showQuickCapture by remember { mutableStateOf(false) }
 
-    // Customizable bottom bar (§Settings): Home is always pinned first.
+    // Customizable bottom bar (§Settings): Home pinned first, then the user's
+    // tabs in their chosen ORDER (the stored list is ordered).
     val barItems = remember(navBarIds) {
         if (navBarIds.isEmpty()) {
             TopLevelDestination.entries.toList()
         } else {
             listOf(TopLevelDestination.HOME) +
-                TopLevelDestination.entries.filter { it != TopLevelDestination.HOME && it.name in navBarIds }
+                navBarIds.mapNotNull { id ->
+                    TopLevelDestination.entries.firstOrNull { it.name == id && it != TopLevelDestination.HOME }
+                }
         }
     }
 

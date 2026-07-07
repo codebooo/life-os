@@ -1,6 +1,12 @@
 package com.lifeos.feature.reminders.alarm
 
+import android.media.AudioAttributes
+import android.media.MediaPlayer
+import android.media.RingtoneManager
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -25,17 +31,28 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** Full-screen alarm surface shown over the lockscreen (§Module 2). */
+/**
+ * Full-screen alarm surface shown over the lockscreen (§Module 2).
+ *
+ * Sound strategy (how Samsung Clock does it): notification-channel sounds are
+ * muted by silent/DND, so this activity plays a *looping ringtone on the
+ * ALARM audio stream* itself — the alarm stream ignores silent mode — plus a
+ * repeating vibration, both stopped on Done/Snooze/close.
+ */
 @AndroidEntryPoint
 class AlarmActivity : ComponentActivity() {
 
     @Inject
     lateinit var remindersRepository: RemindersRepository
 
+    private var player: MediaPlayer? = null
+    private var vibrator: Vibrator? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setShowWhenLocked(true)
         setTurnScreenOn(true)
+        startAlarmSound()
 
         val reminderId = intent.getLongExtra(ReminderAlarmReceiver.EXTRA_REMINDER_ID, -1L)
         val title = intent.getStringExtra(ReminderAlarmReceiver.EXTRA_TITLE) ?: "Reminder"
@@ -79,5 +96,49 @@ class AlarmActivity : ComponentActivity() {
             }
         }
         finish()
+    }
+
+    /** Looping alarm ringtone on USAGE_ALARM + repeating vibration. */
+    private fun startAlarmSound() {
+        val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            ?: return
+        runCatching {
+            player = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build(),
+                )
+                setDataSource(this@AlarmActivity, uri)
+                isLooping = true
+                prepare()
+                start()
+            }
+        }
+        runCatching {
+            vibrator = getSystemService(VibratorManager::class.java).defaultVibrator.also {
+                it.vibrate(
+                    VibrationEffect.createWaveform(longArrayOf(0, 500, 400, 500, 400, 800), 0),
+                    android.os.VibrationAttributes.createForUsage(android.os.VibrationAttributes.USAGE_ALARM),
+                )
+            }
+        }
+    }
+
+    private fun stopAlarmSound() {
+        runCatching {
+            player?.stop()
+            player?.release()
+        }
+        player = null
+        vibrator?.cancel()
+        vibrator = null
+    }
+
+    override fun onDestroy() {
+        stopAlarmSound()
+        super.onDestroy()
     }
 }

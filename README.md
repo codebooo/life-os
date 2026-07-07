@@ -7,7 +7,7 @@ or on your own NAS (Ollama). No third-party cloud, ever.
 **Spec:** [`docs/PRODUCTION_PLAN.md`](docs/PRODUCTION_PLAN.md). Every module
 and rule traces back to a section (and often a community demand source) there.
 
-## Status — v0.1.0-alpha.6
+## Status — v0.1.0-alpha.7
 
 | Area | State |
 |---|---|
@@ -25,9 +25,7 @@ and rule traces back to a section (and often a community demand source) there.
 | Time-stamped to-dos surface in the Calendar; Clock has a Samsung-style wheel timer (mm:ss↔seconds toggle) + stopwatch laps; Routes embeds a native osmdroid OpenStreetMap | ✅ |
 | Calendar v2: Month/Week/Day views, hour timeline, tap-to-edit, all-day + minute precision, Proton ICS one-way sync + .ics export | ✅ |
 | Offline voice via open-source Vosk (one-time 40 MB model) — the Google recognizer is gone; nav hand-offs use plain geo: URIs | ✅ |
-| Customizable bottom bar + Home grid/list toggle; planner accept/skip persists (✓ completes the to-do); reminder alarms use a loud alarm-stream channel | ✅ |
-
-**Google-free by design:** no Google service is ever called at runtime (no Play Services, no Google recognizer, no Google Maps). Remaining Google-*authored* open-source, fully on-device libraries: AndroidX/Jetpack (unavoidable on Android), MediaPipe (Gemma inference), ML Kit on-device OCR/barcode (no network) — swap candidates documented in the plan.
+| Customizable bottom bar (toggle + reorder) + Home grid/list toggle with long-press drag-arrange; planner accept/skip persists (✓ completes the to-do); reminder alarms ring on the ALARM stream even in silent mode | ✅ |
 | Clock (analog/digital/word faces, world clock, stopwatch, timer) | ✅ |
 | ADHD tools: visual focus timer, streaks, overwhelm "What's next?" overlay (SYSTEM_ALERT_WINDOW) | ✅ |
 | Memex archive: share-sheet clip + timeline, annotate-to-keep, 12-month auto-purge | ✅ |
@@ -37,12 +35,14 @@ and rule traces back to a section (and often a community demand source) there.
 | Mail MCP client (JSON-RPC over HTTP/SSE) for the NAS Proton mail MCP; IMAP fallback stays primary | ✅ |
 | Deferred post-alpha: Glance home-screen widgets, HA WebSocket live state/zones, Vault unlock UI, first-run onboarding checklist (grants live in Settings → System access), FinTS bank sync | 🔜 |
 
+**Google-free by design:** no Google service is ever called at runtime (no Play Services, no Google recognizer, no Google Maps). Remaining Google-*authored* open-source, fully on-device libraries: AndroidX/Jetpack (unavoidable on Android), MediaPipe (Gemma inference), ML Kit on-device OCR/barcode (no network) — swap candidates documented in the plan.
+
 ## Install (alpha)
 
 Grab `lifeos-v*.apk` from [Releases](../../releases), then:
 
 ```
-adb install -r -g lifeos-v0.1.0-alpha.6.apk
+adb install -r -g lifeos-v0.1.0-alpha.7.apk
 ```
 
 or copy to the phone and allow *Install unknown apps*. Android 13+ (minSdk 33).
