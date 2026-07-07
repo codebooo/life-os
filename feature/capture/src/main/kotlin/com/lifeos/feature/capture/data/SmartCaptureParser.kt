@@ -73,10 +73,10 @@ object SmartCaptureParser {
     private fun parseTime(lower: String, now: Long): Long? {
         RELATIVE.find(lower)?.let { match ->
             val amount = match.groupValues[1].toLongOrNull() ?: return@let
-            val unitMs = when {
-                match.groupValues[2].startsWith("min") -> 60_000L
-                match.groupValues[2].startsWith("h") -> 3_600_000L
-                match.groupValues[2].startsWith("day") -> 86_400_000L
+            val unitMs = when (match.groupValues[2].first()) {
+                'm' -> 60_000L
+                'h' -> 3_600_000L
+                'd' -> 86_400_000L
                 else -> return@let
             }
             return now + amount * unitMs
@@ -140,7 +140,10 @@ object SmartCaptureParser {
         text.replace(LEADING_TIME, "").trim().ifBlank { text }.replaceFirstChar { it.uppercase() }
 
     private val DURATION = Regex("(\\d+)\\s*(h(?:ou)?rs?|min(?:ute)?s?|m\\b|s(?:ec(?:ond)?s?)?)")
-    private val RELATIVE = Regex("in\\s+(\\d+)\\s*(min(?:ute)?s?|h(?:ou)?rs?|days?)")
+    // "in 30 minutes" plus compact "1m"/"5min"/"2h"/"1d"; unit must not run into
+    // another letter so "6pm"/"5 mangoes" are untouched.
+    private val RELATIVE =
+        Regex("(?:in\\s+)?\\b(\\d+)\\s*(m(?:in(?:ute)?s?)?|h(?:(?:ou)?rs?)?|d(?:ays?)?)(?![a-z])")
     private val TIME = Regex("(?:at\\s+)?(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm)?\\b")
     private val LEADING_TIME = Regex(
         "^(at\\s+)?\\d{1,2}(:\\d{2})?\\s*(am|pm)?\\s+|^(tomorrow|tonight|today)\\s+",

@@ -34,3 +34,12 @@
 
 # Markdown renderer
 -keep class com.mikepenz.markdown.** { *; }
+
+# Vosk offline STT + JNA (reflection-based native bridge — R8 must not strip)
+-keep class org.vosk.** { *; }
+-keep class com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.** { *; }
+-dontwarn com.sun.jna.**
+
+# osmdroid
+-dontwarn org.osmdroid.**

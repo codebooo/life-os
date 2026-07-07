@@ -28,18 +28,28 @@ import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.ListItem
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.Card
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.round
+import androidx.compose.ui.zIndex
 import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -65,6 +75,7 @@ fun HomeScreen(
 ) {
     val plannerState by plannerViewModel.uiState.collectAsStateWithLifecycle()
     val listLayout by homeViewModel.listLayout.collectAsStateWithLifecycle()
+    val savedOrder by homeViewModel.homeOrder.collectAsStateWithLifecycle()
     // Fresh ranking every time Home comes back into view — never a stale card.
     androidx.compose.runtime.LaunchedEffect(Unit) { plannerViewModel.recompute() }
     val items = listOf(
@@ -196,44 +207,134 @@ fun HomeScreen(
                 }
             }
         }
-        if (listLayout) {
-            LazyColumn(contentPadding = PaddingValues(vertical = 4.dp)) {
-                items(items.size) { index ->
-                    val item = items[index]
-                    Card(
-                        onClick = { onNavigate(item.destination) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 4.dp),
-                    ) {
-                        ListItem(
-                            headlineContent = { Text(item.label) },
-                            supportingContent = { Text(item.description) },
-                            leadingContent = {
-                                Icon(item.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            },
-                        )
-                    }
-                }
-            }
+        ReorderableTileGrid(
+            items = items,
+            savedOrder = savedOrder,
+            listLayout = listLayout,
+            onNavigate = onNavigate,
+            onOrderChanged = { homeViewModel.saveOrder(it) },
+        )
+    }
+}
+
+/**
+ * The Home tiles with long-press drag-to-rearrange (§7.6). One implementation
+ * serves both layouts: list mode is simply a one-column grid. The final order
+ * is persisted when the drag ends.
+ */
+@Composable
+private fun ReorderableTileGrid(
+    items: List<AppGridItem>,
+    savedOrder: List<String>,
+    listLayout: Boolean,
+    onNavigate: (LifeDestination) -> Unit,
+    onOrderChanged: (List<String>) -> Unit,
+) {
+    // Apply the saved arrangement; unknown/new tiles append in default order.
+    val base = remember(items, savedOrder) {
+        if (savedOrder.isEmpty()) {
+            items
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 160.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(items) { item ->
-                    Card(onClick = { onNavigate(item.destination) }, modifier = Modifier.fillMaxWidth()) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(item.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                            Text(item.label, style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                item.description,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            val byLabel = items.associateBy { it.label }
+            savedOrder.mapNotNull { byLabel[it] } + items.filter { it.label !in savedOrder }
+        }
+    }
+    var order by remember(base) { mutableStateOf(base) }
+    val gridState = rememberLazyGridState()
+    var draggingKey by remember { mutableStateOf<String?>(null) }
+    var dragOffset by remember { mutableStateOf(Offset.Zero) }
+
+    fun itemAt(position: Offset) = gridState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
+        IntRect(info.offset, info.size).contains(position.round())
+    }
+
+    LazyVerticalGrid(
+        state = gridState,
+        columns = if (listLayout) GridCells.Fixed(1) else GridCells.Adaptive(minSize = 160.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(if (listLayout) 8.dp else 12.dp),
+        modifier = Modifier.pointerInput(listLayout) {
+            detectDragGesturesAfterLongPress(
+                onDragStart = { position ->
+                    itemAt(position)?.let { info ->
+                        draggingKey = info.key as? String
+                        dragOffset = Offset.Zero
+                    }
+                },
+                onDrag = { change, amount ->
+                    change.consume()
+                    dragOffset += amount
+                    val key = draggingKey ?: return@detectDragGesturesAfterLongPress
+                    val dragged = gridState.layoutInfo.visibleItemsInfo
+                        .firstOrNull { it.key == key } ?: return@detectDragGesturesAfterLongPress
+                    val center = Offset(
+                        dragged.offset.x + dragOffset.x + dragged.size.width / 2f,
+                        dragged.offset.y + dragOffset.y + dragged.size.height / 2f,
+                    )
+                    val target = itemAt(center)
+                    if (target != null && target.key != key) {
+                        val from = order.indexOfFirst { it.label == key }
+                        val to = order.indexOfFirst { it.label == target.key }
+                        if (from != -1 && to != -1) {
+                            order = order.toMutableList().apply { add(to, removeAt(from)) }
+                            // Keep the tile under the finger across the position swap.
+                            dragOffset += Offset(
+                                (dragged.offset.x - target.offset.x).toFloat(),
+                                (dragged.offset.y - target.offset.y).toFloat(),
                             )
                         }
+                    }
+                },
+                onDragEnd = {
+                    draggingKey = null
+                    dragOffset = Offset.Zero
+                    onOrderChanged(order.map { it.label })
+                },
+                onDragCancel = {
+                    draggingKey = null
+                    dragOffset = Offset.Zero
+                },
+            )
+        },
+    ) {
+        items(order, key = { it.label }) { item ->
+            val dragging = draggingKey == item.label
+            val tileModifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (dragging) {
+                        Modifier
+                            .zIndex(1f)
+                            .graphicsLayer {
+                                translationX = dragOffset.x
+                                translationY = dragOffset.y
+                                scaleX = 1.04f
+                                scaleY = 1.04f
+                                shadowElevation = 16f
+                            }
+                    } else {
+                        Modifier.animateItem()
+                    },
+                )
+            Card(onClick = { onNavigate(item.destination) }, modifier = tileModifier) {
+                if (listLayout) {
+                    ListItem(
+                        headlineContent = { Text(item.label) },
+                        supportingContent = { Text(item.description) },
+                        leadingContent = {
+                            Icon(item.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        },
+                    )
+                } else {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(item.icon, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Text(item.label, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            item.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
             }

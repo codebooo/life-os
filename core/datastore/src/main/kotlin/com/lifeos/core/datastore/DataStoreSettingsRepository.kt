@@ -81,6 +81,15 @@ internal class DataStoreSettingsRepository @Inject constructor(
         dataStore.edit { prefs -> prefs[KEY_PROTON_ICS_URL] = url.trim() }
     }
 
+    override val homeOrder: Flow<List<String>> =
+        dataStore.data.map { prefs ->
+            prefs[KEY_HOME_ORDER]?.split('|')?.filter { it.isNotBlank() } ?: emptyList()
+        }
+
+    override suspend fun setHomeOrder(labels: List<String>) {
+        dataStore.edit { prefs -> prefs[KEY_HOME_ORDER] = labels.joinToString("|") }
+    }
+
     private companion object {
         val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val KEY_THEME_PALETTE = stringPreferencesKey("theme_palette")
@@ -90,5 +99,6 @@ internal class DataStoreSettingsRepository @Inject constructor(
         val KEY_HOME_LIST_LAYOUT = booleanPreferencesKey("home_list_layout")
         val KEY_PLANNER_DISMISSED = stringPreferencesKey("planner_dismissed")
         val KEY_PROTON_ICS_URL = stringPreferencesKey("proton_ics_url")
+        val KEY_HOME_ORDER = stringPreferencesKey("home_order")
     }
 }

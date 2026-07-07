@@ -17,6 +17,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -119,22 +122,57 @@ fun SettingsRoute(
             )
 
             SectionHeader(title = "Navigation bar")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(
-                    "CALENDAR" to "Calendar",
-                    "TASKS" to "Tasks",
-                    "INBOX" to "Inbox",
-                    "ASSISTANT" to "Assistant",
-                ).forEach { (id, label) ->
-                    FilterChip(
-                        selected = id in uiState.navBarItems,
-                        onClick = { viewModel.onEvent(SettingsUiEvent.ToggleNavItem(id)) },
-                        label = { Text(label) },
-                    )
-                }
+            val navLabels = mapOf(
+                "CALENDAR" to "Calendar",
+                "TASKS" to "Tasks",
+                "INBOX" to "Inbox",
+                "ASSISTANT" to "Assistant",
+            )
+            // Enabled tabs first (orderable), then disabled ones to re-enable.
+            uiState.navBarItems.forEachIndexed { index, id ->
+                ReorderRow(
+                    label = navLabels[id] ?: id,
+                    enabled = true,
+                    canMoveUp = index > 0,
+                    canMoveDown = index < uiState.navBarItems.lastIndex,
+                    onMoveUp = { viewModel.onEvent(SettingsUiEvent.MoveNavItem(id, -1)) },
+                    onMoveDown = { viewModel.onEvent(SettingsUiEvent.MoveNavItem(id, +1)) },
+                    onToggle = { viewModel.onEvent(SettingsUiEvent.ToggleNavItem(id)) },
+                )
+            }
+            navLabels.keys.filter { it !in uiState.navBarItems }.forEach { id ->
+                ReorderRow(
+                    label = navLabels[id] ?: id,
+                    enabled = false,
+                    canMoveUp = false,
+                    canMoveDown = false,
+                    onMoveUp = {},
+                    onMoveDown = {},
+                    onToggle = { viewModel.onEvent(SettingsUiEvent.ToggleNavItem(id)) },
+                )
             }
             Text(
-                "Pick which tabs sit next to Home. Everything stays reachable from the Home grid.",
+                "Toggle tabs and order them with the arrows — Home stays pinned first. " +
+                    "Everything stays reachable from the Home grid.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            SectionHeader(title = "Home screen")
+            uiState.homeOrder.forEachIndexed { index, label ->
+                ReorderRow(
+                    label = label,
+                    enabled = true,
+                    showToggle = false,
+                    canMoveUp = index > 0,
+                    canMoveDown = index < uiState.homeOrder.lastIndex,
+                    onMoveUp = { viewModel.onEvent(SettingsUiEvent.MoveHomeItem(label, -1)) },
+                    onMoveDown = { viewModel.onEvent(SettingsUiEvent.MoveHomeItem(label, +1)) },
+                    onToggle = {},
+                )
+            }
+            Text(
+                "Tip: you can also long-press and drag tiles directly on the Home screen.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -258,5 +296,39 @@ private fun SystemSettingRow(title: String, subtitle: String, onClick: () -> Uni
             headlineContent = { Text(title) },
             supportingContent = { Text(subtitle) },
         )
+    }
+}
+
+/** One orderable row: up/down arrows plus an optional enable toggle. */
+@Composable
+private fun ReorderRow(
+    label: String,
+    enabled: Boolean,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onToggle: () -> Unit,
+    showToggle: Boolean = true,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = onMoveUp, enabled = canMoveUp) {
+            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = "Move $label up")
+        }
+        IconButton(onClick = onMoveDown, enabled = canMoveDown) {
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = "Move $label down")
+        }
+        if (showToggle) {
+            Switch(checked = enabled, onCheckedChange = { onToggle() })
+        }
     }
 }
