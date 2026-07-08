@@ -38,6 +38,17 @@ interface CaptureDao {
     @Query("SELECT * FROM log_entries WHERE formId = :formId ORDER BY at DESC")
     fun observeEntries(formId: Long): Flow<List<LogEntryEntity>>
 
+    /** Per-form entry totals — powers the Logger tiles ("Pizza eaten: 12"). */
+    @Query("SELECT formId, COUNT(*) as n FROM log_entries GROUP BY formId")
+    fun observeEntryCounts(): Flow<List<FormEntryCount>>
+
+    /** Counter decrement = undo the newest tick. */
+    @Query(
+        "DELETE FROM log_entries WHERE id = " +
+            "(SELECT id FROM log_entries WHERE formId = :formId ORDER BY at DESC LIMIT 1)",
+    )
+    suspend fun deleteLatestEntry(formId: Long)
+
     @Insert
     suspend fun insertTask(task: TaskEntity): Long
 
@@ -51,3 +62,6 @@ interface CaptureDao {
     @Query("UPDATE tasks SET done = :done WHERE id = :taskId")
     suspend fun setTaskDone(taskId: Long, done: Boolean)
 }
+
+/** Row of [CaptureDao.observeEntryCounts]. */
+data class FormEntryCount(val formId: Long, val n: Int)

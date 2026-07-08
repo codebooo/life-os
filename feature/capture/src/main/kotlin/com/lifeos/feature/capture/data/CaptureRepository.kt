@@ -18,6 +18,7 @@ import com.lifeos.core.service.LifeEvent
 import com.lifeos.core.service.LifeEventBus
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -58,6 +59,15 @@ interface CaptureRepository {
     suspend fun deleteForm(formId: Long)
     suspend fun addEntry(formId: Long, values: Map<String, String>): LifeResult<Long>
     suspend fun setTaskDone(taskId: Long, done: Boolean)
+
+    /** Per-form entry totals for the Logger tiles. */
+    fun observeEntryCounts(): kotlinx.coroutines.flow.Flow<Map<Long, Int>>
+
+    /** Counter tick: one entry = one count. */
+    suspend fun increment(formId: Long): LifeResult<Long>
+
+    /** Counter un-tick: removes the newest entry. */
+    suspend fun decrement(formId: Long)
 }
 
 @kotlinx.serialization.Serializable
@@ -254,6 +264,17 @@ internal class DefaultCaptureRepository @Inject constructor(
 
     override suspend fun setTaskDone(taskId: Long, done: Boolean) = withContext(dispatchers.io) {
         captureDao.setTaskDone(taskId, done)
+    }
+
+    override fun observeEntryCounts(): kotlinx.coroutines.flow.Flow<Map<Long, Int>> =
+        captureDao.observeEntryCounts()
+            .map { counts -> counts.associate { it.formId to it.n } }
+
+    override suspend fun increment(formId: Long): LifeResult<Long> =
+        addEntry(formId, mapOf("count" to "1"))
+
+    override suspend fun decrement(formId: Long) = withContext(dispatchers.io) {
+        captureDao.deleteLatestEntry(formId)
     }
 
     companion object {

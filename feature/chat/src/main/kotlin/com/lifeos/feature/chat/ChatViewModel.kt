@@ -27,6 +27,9 @@ data class ChatUiState(
     val error: String? = null,
     val showConversations: Boolean = false,
     val showSettings: Boolean = false,
+    /** Manual context (notes, pasted files) attached to every prompt. */
+    val contextText: String = "",
+    val showContext: Boolean = false,
 )
 
 sealed interface ChatUiEvent {
@@ -37,6 +40,10 @@ sealed interface ChatUiEvent {
     data class DeleteConversation(val id: Long) : ChatUiEvent
     data object ToggleConversations : ChatUiEvent
     data object ToggleSettings : ChatUiEvent
+    data object ToggleContext : ChatUiEvent
+    data class ContextChanged(val value: String) : ChatUiEvent
+    /** File picked from the document picker — appended to the context. */
+    data class ContextFileAttached(val name: String, val content: String) : ChatUiEvent
     data object DismissError : ChatUiEvent
 }
 
@@ -77,6 +84,18 @@ class ChatViewModel @Inject constructor(
                 updateState { it.copy(showConversations = !it.showConversations) }
             ChatUiEvent.ToggleSettings ->
                 updateState { it.copy(showSettings = !it.showSettings) }
+            ChatUiEvent.ToggleContext -> updateState { it.copy(showContext = !it.showContext) }
+            is ChatUiEvent.ContextChanged -> updateState { it.copy(contextText = event.value) }
+            is ChatUiEvent.ContextFileAttached -> updateState {
+                it.copy(
+                    contextText = buildString {
+                        append(it.contextText)
+                        if (it.contextText.isNotBlank()) append("\n\n")
+                        append("--- ${event.name} ---\n")
+                        append(event.content.take(60_000))
+                    },
+                )
+            }
             ChatUiEvent.DismissError -> updateState { it.copy(error = null) }
         }
     }
@@ -93,8 +112,16 @@ class ChatViewModel @Inject constructor(
     }
 
     private fun send() {
-        val text = uiState.value.input.trim()
-        if (text.isEmpty() || uiState.value.streaming) return
+        val typed = uiState.value.input.trim()
+        if (typed.isEmpty() || uiState.value.streaming) return
+
+        // Manual context rides along visibly — no hidden prompt surgery.
+        val context = uiState.value.contextText.trim()
+        val text = if (context.isBlank()) {
+            typed
+        } else {
+            "[Context]\n$context\n[/Context]\n\n$typed"
+        }
 
         updateState { it.copy(input = "", streaming = true, error = null) }
         sendJob = viewModelScope.launch {

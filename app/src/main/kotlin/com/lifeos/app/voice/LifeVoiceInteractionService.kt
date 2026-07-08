@@ -95,11 +95,12 @@ class LifeAssistantSession(
 
         val panel = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(24), dp(20), dp(24), dp(24))
+            setPadding(dp(24), dp(44), dp(24), dp(22))
             background = GradientDrawable().apply {
+                // Anchored to the TOP edge: round only the bottom corners.
                 cornerRadii = floatArrayOf(
-                    dp(28).toFloat(), dp(28).toFloat(), dp(28).toFloat(), dp(28).toFloat(),
                     0f, 0f, 0f, 0f,
+                    dp(28).toFloat(), dp(28).toFloat(), dp(28).toFloat(), dp(28).toFloat(),
                 )
                 setColor(Color.parseColor("#F0121821"))
             }
@@ -185,12 +186,17 @@ class LifeAssistantSession(
 
         root.addView(
             panel,
+            // Top placement (like a notification shade drop-in) — keeps the
+            // text field clear of the keyboard.
             FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
-                Gravity.BOTTOM,
+                Gravity.TOP,
             ),
         )
+        panel.translationY = -60f * density
+        panel.alpha = 0f
+        panel.animate().translationY(0f).alpha(1f).setDuration(260).start()
         return root
     }
 
@@ -239,60 +245,103 @@ class LifeAssistantSession(
 }
 
 /**
- * Apple-Intelligence-style animated glow hugging all four screen edges:
- * a rotating sweep gradient clipped to a thick rounded-rect stroke,
- * breathing via an alpha pulse.
+ * Apple-Intelligence-style edge glow: three stacked strokes — a wide, heavily
+ * blurred bloom, a mid halo, and a bright core — all driven by a slowly
+ * flowing multi-hue sweep. The bloom's width and opacity breathe out of phase
+ * with the color flow, giving the soft "waving" light of the reference.
  */
 private class GlowBorderView(context: Context) : View(context) {
 
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-    }
-    private var phase = 0f
-    private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-        duration = 2600
+    private val bloom = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val halo = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val core = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private var flow = 0f // color travel around the border
+    private var breath = 0f // slow width/alpha wave
+
+    private val flowAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+        duration = 6000
         repeatCount = ValueAnimator.INFINITE
         interpolator = LinearInterpolator()
         addUpdateListener {
-            phase = it.animatedValue as Float
+            flow = it.animatedValue as Float
             invalidate()
         }
     }
+    private val breathAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+        duration = 3400
+        repeatCount = ValueAnimator.INFINITE
+        interpolator = LinearInterpolator()
+        addUpdateListener { breath = it.animatedValue as Float }
+    }
 
-    fun start() = animator.start()
-    fun stop() = animator.cancel()
+    init {
+        // BlurMaskFilter needs software rendering.
+        setLayerType(LAYER_TYPE_SOFTWARE, null)
+    }
+
+    fun start() {
+        flowAnimator.start()
+        breathAnimator.start()
+    }
+
+    fun stop() {
+        flowAnimator.cancel()
+        breathAnimator.cancel()
+    }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val strokeWidth = 14f * resources.displayMetrics.density
-        paint.strokeWidth = strokeWidth
-        // Rotating multi-hue sweep — blue → purple → pink → cyan.
-        val colors = intArrayOf(
-            Color.parseColor("#4285F4"),
-            Color.parseColor("#A142F4"),
-            Color.parseColor("#F44292"),
-            Color.parseColor("#42D4F4"),
-            Color.parseColor("#4285F4"),
-        )
-        paint.shader = SweepGradient(width / 2f, height / 2f, colors, null).also { shader ->
+        val density = resources.displayMetrics.density
+        val wave = (kotlin.math.sin(breath * 2 * Math.PI) + 1f).toFloat() / 2f // 0..1
+
+        val shader = SweepGradient(
+            width / 2f,
+            height / 2f,
+            intArrayOf(
+                Color.parseColor("#4285F4"),
+                Color.parseColor("#B14CF0"),
+                Color.parseColor("#FF5CA8"),
+                Color.parseColor("#FF9950"),
+                Color.parseColor("#40E0D0"),
+                Color.parseColor("#4285F4"),
+            ),
+            null,
+        ).also {
             val matrix = android.graphics.Matrix()
-            matrix.postRotate(phase * 360f, width / 2f, height / 2f)
-            shader.setLocalMatrix(matrix)
+            matrix.postRotate(flow * 360f, width / 2f, height / 2f)
+            it.setLocalMatrix(matrix)
         }
-        // Breathe between 55% and 100% opacity.
-        paint.alpha = (140 + 115 * kotlin.math.sin(phase * 2 * Math.PI).toFloat().let { (it + 1) / 2 }).toInt()
-        val inset = strokeWidth / 2f
-        val radius = 38f * resources.displayMetrics.density
-        canvas.drawRoundRect(
-            RectF(inset, inset, width - inset, height - inset),
-            radius,
-            radius,
-            paint,
-        )
+
+        val radius = 44f * density
+        fun stroke(paint: Paint, widthDp: Float, blurDp: Float, alpha: Int) {
+            paint.shader = shader
+            paint.strokeWidth = widthDp * density
+            paint.maskFilter = if (blurDp > 0) {
+                android.graphics.BlurMaskFilter(blurDp * density, android.graphics.BlurMaskFilter.Blur.NORMAL)
+            } else {
+                null
+            }
+            paint.alpha = alpha
+            val inset = paint.strokeWidth / 2.5f
+            canvas.drawRoundRect(
+                RectF(inset, inset, width - inset, height - inset),
+                radius,
+                radius,
+                paint,
+            )
+        }
+
+        // Wide soft bloom that visibly breathes…
+        stroke(bloom, widthDp = 26f + 14f * wave, blurDp = 28f, alpha = (90 + 70 * wave).toInt())
+        // …a tighter halo…
+        stroke(halo, widthDp = 10f + 4f * wave, blurDp = 10f, alpha = 170)
+        // …and a thin bright core hugging the edge.
+        stroke(core, widthDp = 3.5f, blurDp = 0f, alpha = 235)
     }
 
     override fun onDetachedFromWindow() {
-        animator.cancel()
+        flowAnimator.cancel()
+        breathAnimator.cancel()
         super.onDetachedFromWindow()
     }
 }

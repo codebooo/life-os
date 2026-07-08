@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -87,30 +90,64 @@ private fun FormListScreen(
             Column(modifier = Modifier.padding(innerPadding)) {
                 EmptyState(
                     title = "Log anything, with a little structure",
-                    description = "Mood, caffeine, sleep, symptoms — define a form once, log in one tap forever.",
+                    description = "Counters, ratings, numbers, collections — define a form once, log in one tap forever. " +
+                        "Try \"Pizza eaten: counter\" or a Books form with title + author fields.",
                 )
             }
         } else {
-            LazyColumn(
-                contentPadding = innerPadding,
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                contentPadding = PaddingValues(
+                    top = innerPadding.calculateTopPadding() + 8.dp,
+                    bottom = 96.dp,
+                    start = 16.dp,
+                    end = 16.dp,
+                ),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxSize(),
             ) {
-                items(uiState.forms, key = { it.id }) { form ->
-                    Surface(onClick = { onEvent(LoggerUiEvent.OpenForm(form)) }) {
-                        ListItem(
-                            headlineContent = { Text(form.name) },
-                            supportingContent = {
-                                Text(
-                                    DefaultCaptureRepository.parseFields(form.fieldsJson)
-                                        .joinToString { "${it.name} (${it.type})" },
-                                )
-                            },
-                            trailingContent = {
-                                IconButton(onClick = { onEvent(LoggerUiEvent.DeleteForm(form.id)) }) {
-                                    Icon(Icons.Filled.Delete, contentDescription = "Delete")
+                gridItems(uiState.forms, key = { it.id }) { form ->
+                    val fields = DefaultCaptureRepository.parseFields(form.fieldsJson)
+                    val count = uiState.counts[form.id] ?: 0
+                    Card(onClick = { onEvent(LoggerUiEvent.OpenForm(form)) }) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(form.name, style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "$count",
+                                style = MaterialTheme.typography.displaySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                            if (LoggerViewModel.isCounterForm(fields)) {
+                                // One-tap counting straight from the tile.
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    androidx.compose.material3.OutlinedButton(
+                                        onClick = { onEvent(LoggerUiEvent.Decrement(form.id)) },
+                                        enabled = count > 0,
+                                        modifier = Modifier.weight(1f),
+                                    ) { Text("−") }
+                                    androidx.compose.material3.Button(
+                                        onClick = { onEvent(LoggerUiEvent.Increment(form.id)) },
+                                        modifier = Modifier.weight(1f),
+                                    ) { Text("+") }
                                 }
-                            },
-                        )
+                            } else {
+                                Text(
+                                    fields.joinToString { it.name },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -163,7 +200,13 @@ private fun FormEditorScreen(
                 onValueChange = { onEvent(LoggerUiEvent.EditorFieldsChanged(it)) },
                 label = { Text("Fields — one per line") },
                 placeholder = { Text("hours: number\nquality: rating\nnotes") },
-                supportingText = { Text("Types: number, text, boolean, rating, duration, date — inferred when omitted") },
+                supportingText = {
+                    Text(
+                        "Types: counter, number, text, boolean, rating, duration, date — inferred when omitted. " +
+                            "A single counter field (\"Pizza eaten: counter\") becomes a tap-to-count tile; " +
+                            "multi-field forms (title, author) count their entries automatically.",
+                    )
+                },
                 minLines = 4,
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -185,6 +228,14 @@ private fun EntriesScreen(
                 navigationIcon = {
                     IconButton(onClick = { onEvent(LoggerUiEvent.Back) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        uiState.activeForm?.let { onEvent(LoggerUiEvent.DeleteForm(it.id)) }
+                        onEvent(LoggerUiEvent.Back)
+                    }) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Delete form")
                     }
                 },
             )
@@ -211,17 +262,41 @@ private fun EntriesScreen(
                     ) {
                         Text("New entry", style = MaterialTheme.typography.titleMedium)
                         uiState.activeFields.forEach { field ->
-                            OutlinedTextField(
+                            TypedFieldInput(
+                                field = field,
                                 value = uiState.entryDraft[field.name].orEmpty(),
-                                onValueChange = { onEvent(LoggerUiEvent.DraftChanged(field.name, it)) },
-                                label = { Text(field.name + (field.unit?.let { " ($it)" } ?: "")) },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
+                                onValue = { onEvent(LoggerUiEvent.DraftChanged(field.name, it)) },
                             )
                         }
                         Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
                             FloatingActionButton(onClick = { onEvent(LoggerUiEvent.AddEntry) }) {
                                 Icon(Icons.Filled.Add, contentDescription = "Add entry")
+                            }
+                        }
+                    }
+                }
+            }
+            // Aggregates: sums/averages for numeric fields across all entries.
+            item {
+                val numericFields = uiState.activeFields.filter { it.type == "number" }
+                if (numericFields.isNotEmpty() && uiState.entries.isNotEmpty()) {
+                    Card {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            numericFields.forEach { field ->
+                                val values = uiState.entries.mapNotNull {
+                                    DefaultCaptureRepository.parseValues(it.valuesJson)[field.name]
+                                        ?.toDoubleOrNull()
+                                }
+                                if (values.isNotEmpty()) {
+                                    Text(
+                                        "${field.name}: total %.1f · avg %.1f".format(
+                                            values.sum(),
+                                            values.average(),
+                                        ) + (field.unit?.let { " $it" } ?: ""),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
                             }
                         }
                     }
@@ -246,5 +321,64 @@ private fun EntriesScreen(
                 }
             }
         }
+    }
+}
+
+/** Renders a form field by its declared type — no more everything-is-text. */
+@Composable
+private fun TypedFieldInput(
+    field: com.lifeos.feature.capture.data.LogFieldSpec,
+    value: String,
+    onValue: (String) -> Unit,
+) {
+    val label = field.name + (field.unit?.let { " ($it)" } ?: "")
+    when (field.type) {
+        "number", "counter" -> OutlinedTextField(
+            value = value,
+            onValueChange = { new -> if (new.all { it.isDigit() || it == '.' || it == '-' }) onValue(new) },
+            label = { Text(label) },
+            singleLine = true,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        "boolean" -> Row(
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(field.name, style = MaterialTheme.typography.bodyLarge)
+            androidx.compose.material3.Switch(
+                checked = value == "yes",
+                onCheckedChange = { onValue(if (it) "yes" else "no") },
+            )
+        }
+        "rating" -> Column {
+            Text(field.name, style = MaterialTheme.typography.bodyMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                (1..5).forEach { star ->
+                    androidx.compose.material3.FilterChip(
+                        selected = value == star.toString(),
+                        onClick = { onValue(star.toString()) },
+                        label = { Text(star.toString()) },
+                    )
+                }
+            }
+        }
+        "date" -> OutlinedTextField(
+            value = value,
+            onValueChange = onValue,
+            label = { Text("$label (e.g. 2026-07-08)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        else -> OutlinedTextField(
+            value = value,
+            onValueChange = onValue,
+            label = { Text(label) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }

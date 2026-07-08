@@ -21,6 +21,8 @@ enum class LoggerMode { FORMS, EDITOR, ENTRIES }
 data class LoggerUiState(
     val mode: LoggerMode = LoggerMode.FORMS,
     val forms: List<LogFormEntity> = emptyList(),
+    /** Entry totals per form id — the tile numbers. */
+    val counts: Map<Long, Int> = emptyMap(),
     // Form editor
     val editorName: String = "",
     val editorFieldLines: String = "",
@@ -41,6 +43,10 @@ sealed interface LoggerUiEvent {
     data class DeleteForm(val formId: Long) : LoggerUiEvent
     data class DraftChanged(val field: String, val value: String) : LoggerUiEvent
     data object AddEntry : LoggerUiEvent
+    /** Counter tile +1 straight from the form list. */
+    data class Increment(val formId: Long) : LoggerUiEvent
+    /** Counter tile −1 (removes the newest tick). */
+    data class Decrement(val formId: Long) : LoggerUiEvent
     data object Back : LoggerUiEvent
     data object DismissError : LoggerUiEvent
 }
@@ -59,6 +65,11 @@ class LoggerViewModel @Inject constructor(
         viewModelScope.launch {
             captureRepository.observeForms().collect { forms ->
                 updateState { it.copy(forms = forms) }
+            }
+        }
+        viewModelScope.launch {
+            captureRepository.observeEntryCounts().collect { counts ->
+                updateState { it.copy(counts = counts) }
             }
         }
         viewModelScope.launch {
@@ -84,6 +95,12 @@ class LoggerViewModel @Inject constructor(
                 it.copy(entryDraft = it.entryDraft + (event.field to event.value))
             }
             LoggerUiEvent.AddEntry -> addEntry()
+            is LoggerUiEvent.Increment -> viewModelScope.launch {
+                captureRepository.increment(event.formId)
+            }
+            is LoggerUiEvent.Decrement -> viewModelScope.launch {
+                captureRepository.decrement(event.formId)
+            }
             LoggerUiEvent.Back -> updateState { it.copy(mode = LoggerMode.FORMS, activeForm = null) }
             LoggerUiEvent.DismissError -> updateState { it.copy(error = null) }
         }
@@ -151,8 +168,15 @@ class LoggerViewModel @Inject constructor(
         name.contains("date") || name.contains("day") -> "date"
         name.contains("time") || name.contains("duration") -> "duration"
         name.contains("rating") || name.contains("mood") || name.contains("score") -> "rating"
-        name.contains("count") || name.contains("weight") || name.contains("amount") ||
+        name.contains("count") || name.contains("eaten") || name.contains("times") -> "counter"
+        name.contains("weight") || name.contains("amount") ||
             name.contains("hours") || name.contains("kg") || name.contains("km") -> "number"
         else -> "text"
+    }
+
+    companion object {
+        /** A one-field counter form renders as a tap-to-count tile. */
+        fun isCounterForm(fields: List<LogFieldSpec>): Boolean =
+            fields.size == 1 && fields.first().type == "counter"
     }
 }

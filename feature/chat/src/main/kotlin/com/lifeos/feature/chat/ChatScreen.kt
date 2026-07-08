@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -77,6 +79,17 @@ internal fun ChatScreen(
                 actions = {
                     uiState.activeEngine?.let { engine ->
                         AssistChip(onClick = {}, label = { Text(engine.label) })
+                    }
+                    IconButton(onClick = { onEvent(ChatUiEvent.ToggleContext) }) {
+                        Icon(
+                            Icons.Filled.AttachFile,
+                            contentDescription = "AI context",
+                            tint = if (uiState.contextText.isNotBlank()) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                androidx.compose.ui.graphics.Color.Unspecified
+                            },
+                        )
                     }
                     IconButton(onClick = { onEvent(ChatUiEvent.NewConversation) }) {
                         Icon(Icons.Filled.Add, contentDescription = "New conversation")
@@ -152,6 +165,71 @@ internal fun ChatScreen(
 
     if (uiState.showSettings) {
         AiSettingsSheet(onDismiss = { onEvent(ChatUiEvent.ToggleSettings) })
+    }
+
+    if (uiState.showContext) {
+        ContextSheet(uiState, onEvent)
+    }
+}
+
+/** Manual "AI Context" (§Module 9): pasted notes or attached text files ride along with every prompt. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ContextSheet(uiState: ChatUiState, onEvent: (ChatUiEvent) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val filePicker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        runCatching {
+            val name = uri.lastPathSegment?.substringAfterLast('/') ?: "file"
+            val content = context.contentResolver.openInputStream(uri)?.use { stream ->
+                stream.readBytes().toString(Charsets.UTF_8)
+            }.orEmpty()
+            onEvent(ChatUiEvent.ContextFileAttached(name, content))
+        }
+    }
+
+    ModalBottomSheet(onDismissRequest = { onEvent(ChatUiEvent.ToggleContext) }) {
+        Column(
+            modifier = Modifier
+                .padding(horizontal = 24.dp)
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text("AI context", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Anything here is attached to every prompt you send (visibly, as a [Context] block). " +
+                    "Paste text or attach files — it never leaves your devices.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            androidx.compose.material3.OutlinedTextField(
+                value = uiState.contextText,
+                onValueChange = { onEvent(ChatUiEvent.ContextChanged(it)) },
+                label = { Text("Context") },
+                minLines = 5,
+                maxLines = 12,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        filePicker.launch(
+                            arrayOf("text/*", "application/json", "application/xml", "text/markdown"),
+                        )
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Attach text file") }
+                androidx.compose.material3.Button(
+                    onClick = { onEvent(ChatUiEvent.ContextChanged("")) },
+                    enabled = uiState.contextText.isNotBlank(),
+                    modifier = Modifier.weight(1f),
+                ) { Text("Clear") }
+            }
+        }
     }
 }
 

@@ -30,6 +30,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -124,7 +125,8 @@ fun RouteRoute(viewModel: RouteViewModel = hiltViewModel()) {
                     .fillMaxWidth()
                     .height(280.dp)
                     .padding(16.dp)
-                    .clip(RoundedCornerShape(16.dp)),
+                    .clip(RoundedCornerShape(16.dp))
+                    .clipToBounds(),
             )
             Text(
                 "Long-press the map to navigate to that point.",
