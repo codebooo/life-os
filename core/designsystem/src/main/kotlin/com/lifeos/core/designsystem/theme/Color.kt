@@ -39,13 +39,13 @@ internal val FallbackDarkColorScheme = darkColorScheme(
 /** Sentinel palette id: follow the wallpaper via Material You dynamic color. */
 const val PALETTE_DYNAMIC = "dynamic"
 
-/** Fixed seed palettes selectable in Settings (standard Google hues). */
+/** Fixed seed palettes selectable in Settings — soft, muted pastels. */
 val ThemePalettes: Map<String, Color> = linkedMapOf(
-    "blue" to Color(0xFF4285F4),
-    "red" to Color(0xFFEA4335),
-    "yellow" to Color(0xFFFBBC05),
-    "green" to Color(0xFF34A853),
-    "purple" to Color(0xFF9334E6),
+    "blue" to Color(0xFF8FB4E8),
+    "red" to Color(0xFFE59AA0),
+    "peach" to Color(0xFFF2C29B),
+    "green" to Color(0xFF9FCBA6),
+    "lavender" to Color(0xFFB9A7E0),
 )
 
 internal fun seededLightScheme(seed: Color): ColorScheme = lightColorScheme(

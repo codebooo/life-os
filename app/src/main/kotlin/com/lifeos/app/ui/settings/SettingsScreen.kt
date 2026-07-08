@@ -166,25 +166,6 @@ fun SettingsRoute(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
-            SectionHeader(title = "Home screen")
-            uiState.homeOrder.forEachIndexed { index, label ->
-                ReorderRow(
-                    label = label,
-                    enabled = true,
-                    showToggle = false,
-                    canMoveUp = index > 0,
-                    canMoveDown = index < uiState.homeOrder.lastIndex,
-                    onMoveUp = { viewModel.onEvent(SettingsUiEvent.MoveHomeItem(label, -1)) },
-                    onMoveDown = { viewModel.onEvent(SettingsUiEvent.MoveHomeItem(label, +1)) },
-                    onToggle = {},
-                )
-            }
-            Text(
-                "Tip: you can also long-press and drag tiles directly on the Home screen.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
             SectionHeader(title = "AI")
             OutlinedTextField(
                 value = uiState.ollamaBaseUrl,

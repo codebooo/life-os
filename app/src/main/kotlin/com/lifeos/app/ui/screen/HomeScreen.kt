@@ -38,6 +38,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -230,19 +232,27 @@ private fun ReorderableTileGrid(
     onNavigate: (LifeDestination) -> Unit,
     onOrderChanged: (List<String>) -> Unit,
 ) {
-    // Apply the saved arrangement; unknown/new tiles append in default order.
-    val base = remember(items, savedOrder) {
-        if (savedOrder.isEmpty()) {
-            items
-        } else {
-            val byLabel = items.associateBy { it.label }
-            savedOrder.mapNotNull { byLabel[it] } + items.filter { it.label !in savedOrder }
-        }
-    }
-    var order by remember(base) { mutableStateOf(base) }
     val gridState = rememberLazyGridState()
     var draggingKey by remember { mutableStateOf<String?>(null) }
     var dragOffset by remember { mutableStateOf(Offset.Zero) }
+
+    // Live order lives in a stable state list so recompositions (or the items
+    // list being rebuilt each pass) never wipe an in-progress drag — that was
+    // the "snap back to origin" bug.
+    val order = remember { mutableStateListOf<AppGridItem>() }
+    LaunchedEffect(savedOrder, items) {
+        val byLabel = items.associateBy { it.label }
+        val arranged = if (savedOrder.isEmpty()) {
+            items
+        } else {
+            savedOrder.mapNotNull { byLabel[it] } + items.filter { it.label !in savedOrder }
+        }
+        // Only re-sync when idle and the content actually changed.
+        if (draggingKey == null && order.map { it.label } != arranged.map { it.label }) {
+            order.clear()
+            order.addAll(arranged)
+        }
+    }
 
     fun itemAt(position: Offset) = gridState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
         IntRect(info.offset, info.size).contains(position.round())
@@ -277,7 +287,7 @@ private fun ReorderableTileGrid(
                         val from = order.indexOfFirst { it.label == key }
                         val to = order.indexOfFirst { it.label == target.key }
                         if (from != -1 && to != -1) {
-                            order = order.toMutableList().apply { add(to, removeAt(from)) }
+                            order.add(to, order.removeAt(from))
                             // Keep the tile under the finger across the position swap.
                             dragOffset += Offset(
                                 (dragged.offset.x - target.offset.x).toFloat(),

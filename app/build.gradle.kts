@@ -10,8 +10,8 @@ android {
 
     defaultConfig {
         applicationId = "com.lifeos"
-        versionCode = 9
-        versionName = "0.1.0-alpha.9"
+        versionCode = 10
+        versionName = "0.1.0-alpha.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
