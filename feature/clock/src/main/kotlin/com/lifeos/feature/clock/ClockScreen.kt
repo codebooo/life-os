@@ -51,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -278,7 +279,9 @@ private fun TimeZoneMapTab(onEvent: (ClockUiEvent) -> Unit) {
         androidx.compose.ui.viewinterop.AndroidView(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .weight(1f)
+                // osmdroid draws outside its bounds while scrolling — clip it.
+                .clipToBounds(),
             factory = { ctx ->
                 org.osmdroid.config.Configuration.getInstance().userAgentValue = "LifeOS/0.1 (personal)"
                 org.osmdroid.config.Configuration.getInstance().osmdroidBasePath =
@@ -293,7 +296,7 @@ private fun TimeZoneMapTab(onEvent: (ClockUiEvent) -> Unit) {
                             object : org.osmdroid.events.MapEventsReceiver {
                                 override fun singleTapConfirmedHelper(p: org.osmdroid.util.GeoPoint?): Boolean {
                                     p ?: return false
-                                    onEvent(ClockUiEvent.AddZoneFromMap(p.longitude))
+                                    onEvent(ClockUiEvent.AddZoneFromMap(p.latitude, p.longitude))
                                     return true
                                 }
 
@@ -485,15 +488,17 @@ private fun TimerTab() {
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         if (running || remainingSeconds > 0) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    if (showAsSeconds) "${remainingSeconds}s" else formatCountdown(remainingSeconds),
-                    style = MaterialTheme.typography.displayLarge,
-                    fontFamily = FontFamily.Monospace,
-                )
-                IconButton(onClick = { showAsSeconds = !showAsSeconds }) {
-                    Icon(Icons.Filled.SwapHoriz, contentDescription = "Toggle seconds / mm:ss")
-                }
+            // Centered time; the display toggle sits below so nothing skews.
+            Text(
+                if (showAsSeconds) "${remainingSeconds}s" else formatCountdown(remainingSeconds),
+                style = MaterialTheme.typography.displayLarge,
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedButton(onClick = { showAsSeconds = !showAsSeconds }) {
+                Icon(Icons.Filled.SwapHoriz, contentDescription = null)
+                Text(if (showAsSeconds) "  Show mm:ss" else "  Show seconds")
             }
         } else {
             // Samsung-style three infinite wheels.

@@ -85,11 +85,34 @@ internal fun AiSettingsSheet(
             )
 
             Text("On-device models", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Gemma is license-gated. One-time setup: 1) open the model page below (log in to Hugging Face), " +
+                    "2) tap \"Acknowledge license\" / \"Agree and access repository\" at the TOP of the model card, " +
+                    "3) create a Read token under Settings → Access Tokens and paste it here.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            run {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                androidx.compose.material3.OutlinedButton(
+                    onClick = {
+                        context.startActivity(
+                            android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse(
+                                    "https://huggingface.co/google/gemma-3n-E2B-it-litert-preview",
+                                ),
+                            ),
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Open Gemma license page (gemma-3n E2B/E4B -it)") }
+            }
             OutlinedTextField(
                 value = uiState.hfToken,
                 onValueChange = { viewModel.onEvent(AiSettingsUiEvent.HfTokenChanged(it)) },
                 label = { Text("Hugging Face token") },
-                supportingText = { Text("Gemma is license-gated: accept it once on huggingface.co, then paste a read token") },
+                supportingText = { Text("A \"Read\" token is enough — fine-grained tokens need \"public gated repos\" access") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
