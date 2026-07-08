@@ -10,6 +10,7 @@ dependencies {
     implementation(projects.core.database)
     implementation(projects.core.datastore)
     implementation(projects.core.ai)
+    implementation(projects.core.service)
     implementation(projects.core.ui)
 
     implementation(libs.androidx.lifecycle.viewmodel.compose)

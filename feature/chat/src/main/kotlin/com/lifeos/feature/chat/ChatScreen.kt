@@ -1,6 +1,7 @@
 package com.lifeos.feature.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,7 +17,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
@@ -87,7 +93,7 @@ internal fun ChatScreen(
                             tint = if (uiState.contextText.isNotBlank()) {
                                 MaterialTheme.colorScheme.primary
                             } else {
-                                androidx.compose.ui.graphics.Color.Unspecified
+                                MaterialTheme.colorScheme.onSurfaceVariant
                             },
                         )
                     }
@@ -279,8 +285,12 @@ private fun MessageBubble(message: AiMessageEntity) {
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             Column(horizontalAlignment = Alignment.Start) {
+                val (thoughts, answer) = remember(message.content) { splitThinking(message.content) }
+                if (thoughts != null) {
+                    ThoughtChain(thoughts)
+                }
                 Text(
-                    text = message.content.ifBlank { "…" },
+                    text = answer.ifBlank { if (thoughts != null) "…" else "…" },
                     style = MaterialTheme.typography.bodyLarge,
                     color = if (isUser) {
                         MaterialTheme.colorScheme.onPrimaryContainer
@@ -290,5 +300,59 @@ private fun MessageBubble(message: AiMessageEntity) {
                 )
             }
         }
+    }
+}
+
+/** Collapsible reasoning block parsed from a &lt;think&gt;…&lt;/think&gt; span. */
+@Composable
+private fun ThoughtChain(thoughts: String) {
+    var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    Column(modifier = Modifier.padding(bottom = 6.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { expanded = !expanded }
+                .padding(vertical = 2.dp),
+        ) {
+            Icon(
+                if (expanded) Icons.Filled.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                if (expanded) "Hide thinking" else "Show thinking",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        androidx.compose.animation.AnimatedVisibility(visible = expanded) {
+            Text(
+                thoughts.trim(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .padding(top = 2.dp, start = 4.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        RoundedCornerShape(8.dp),
+                    )
+                    .padding(8.dp),
+            )
+        }
+    }
+}
+
+/** Splits "&lt;think&gt;…&lt;/think&gt; answer" into (thoughts?, answer); handles a still-streaming, unclosed tag. */
+private fun splitThinking(content: String): Pair<String?, String> {
+    val start = content.indexOf("<think>")
+    if (start == -1) return null to content
+    val afterOpen = content.substring(start + 7)
+    val close = afterOpen.indexOf("</think>")
+    return if (close == -1) {
+        // Still streaming the thought.
+        afterOpen to ""
+    } else {
+        afterOpen.substring(0, close) to afterOpen.substring(close + 8).trim()
     }
 }

@@ -44,6 +44,11 @@ class GemmaEngine @Inject constructor(
 
     override suspend fun isAvailable(): Boolean = modelFile()?.exists() == true
 
+    /**
+     * Runs the prompt on the GPU backend (the big speed win vs the old
+     * CPU-only default — that's why Edge Gallery felt far faster). Access is
+     * serialized via [mutex]; one chunk is emitted with the full answer.
+     */
     override fun stream(request: AiRequest): Flow<AiChunk> = flow {
         val file = modelFile()
         check(file != null && file.exists()) { "No on-device model at ${file?.absolutePath}" }
@@ -68,10 +73,13 @@ class GemmaEngine @Inject constructor(
         if (current != null && loadedModelPath == path) return current
         current?.close()
 
-        LifeLogger.i(TAG, "Loading on-device model from $path")
+        LifeLogger.i(TAG, "Loading on-device model from $path (GPU)")
         val options = LlmInference.LlmInferenceOptions.builder()
             .setModelPath(path)
             .setMaxTokens(MAX_TOKENS)
+            // GPU backend — the difference between Edge-Gallery-fast and the
+            // old CPU crawl. Falls back to CPU internally if unavailable.
+            .setPreferredBackend(LlmInference.Backend.GPU)
             .build()
         return LlmInference.createFromOptions(context, options).also {
             llm = it

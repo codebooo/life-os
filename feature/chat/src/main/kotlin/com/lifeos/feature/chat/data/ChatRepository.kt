@@ -40,6 +40,7 @@ interface ChatRepository {
 internal class DefaultChatRepository @Inject constructor(
     private val chatDao: ChatDao,
     private val aiRouter: AiRouter,
+    private val commandHandler: ChatCommandHandler,
 ) : ChatRepository {
 
     override fun observeConversations(): Flow<List<AiConversationEntity>> =
@@ -92,6 +93,22 @@ internal class DefaultChatRepository @Inject constructor(
             }
         }
 
+        // Deterministic module commands run first and actually DO the thing
+        // (add task, set reminder/timer/event, read packages/tasks). Only open
+        // questions fall through to the LLM. The context block from the AI
+        // Context sheet is stripped before matching so it never confuses intent.
+        val command = commandHandler.tryHandle(text.substringAfterLast("[/Context]").trim().ifBlank { text })
+        if (command != null) {
+            engine = AiEngineId.ON_DEVICE_GEMMA
+            emit(ReplyProgress.Started(convId, engine!!))
+            accumulated.append(command)
+            persistAssistant()
+            chatDao.touchConversation(convId, updatedAt = System.currentTimeMillis())
+            emit(ReplyProgress.Delta(command))
+            emit(ReplyProgress.Done(convId))
+            return@flow
+        }
+
         val request = AiRequest(messages = history, system = SYSTEM_PROMPT)
         aiRouter.stream(request).collect { event ->
             when (event) {
@@ -130,6 +147,8 @@ internal class DefaultChatRepository @Inject constructor(
         const val ROLE_USER = "user"
         const val ROLE_ASSISTANT = "assistant"
         const val SYSTEM_PROMPT =
-            "You are LifeOS, a private on-device life assistant. Be concise, practical and direct."
+            "You are LifeOS, a private on-device life assistant. Be concise, practical and direct. " +
+                "If a question needs reasoning, you MAY put your step-by-step thinking inside " +
+                "<think>...</think> first, then give the final answer after </think>. Keep thinking brief."
     }
 }

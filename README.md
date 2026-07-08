@@ -7,7 +7,7 @@ or on your own NAS (Ollama). No third-party cloud, ever.
 **Spec:** [`docs/PRODUCTION_PLAN.md`](docs/PRODUCTION_PLAN.md). Every module
 and rule traces back to a section (and often a community demand source) there.
 
-## Status — v0.1.0-alpha.9
+## Status — v0.1.0-alpha.10
 
 | Area | State |
 |---|---|
@@ -44,7 +44,7 @@ and rule traces back to a section (and often a community demand source) there.
 Grab `lifeos-v*.apk` from [Releases](../../releases), then:
 
 ```
-adb install -r -g lifeos-v0.1.0-alpha.9.apk
+adb install -r -g lifeos-v0.1.0-alpha.10.apk
 ```
 
 or copy to the phone and allow *Install unknown apps*. Android 13+ (minSdk 33).
