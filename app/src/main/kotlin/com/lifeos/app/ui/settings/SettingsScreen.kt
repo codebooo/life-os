@@ -15,11 +15,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Switch
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.zIndex
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -299,7 +307,10 @@ private fun SystemSettingRow(title: String, subtitle: String, onClick: () -> Uni
     }
 }
 
-/** One orderable row: up/down arrows plus an optional enable toggle. */
+/**
+ * One orderable row: long-press-drag anywhere on the row to move it (same
+ * gesture as the Home tiles), with up/down arrows kept for one-tap moves.
+ */
 @Composable
 private fun ReorderRow(
     label: String,
@@ -311,9 +322,51 @@ private fun ReorderRow(
     onToggle: () -> Unit,
     showToggle: Boolean = true,
 ) {
+    var dragY by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
+    val rowHeightPx = with(LocalDensity.current) { 56.dp.toPx() }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (dragging) {
+                    Modifier
+                        .zIndex(1f)
+                        .graphicsLayer { translationY = dragY }
+                } else {
+                    Modifier
+                },
+            )
+            .pointerInput(label, canMoveUp, canMoveDown) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = {
+                        dragging = true
+                        dragY = 0f
+                    },
+                    onDrag = { change, amount ->
+                        change.consume()
+                        dragY += amount.y
+                        // One row of travel = one position step.
+                        if (dragY <= -rowHeightPx && canMoveUp) {
+                            onMoveUp()
+                            dragY += rowHeightPx
+                        } else if (dragY >= rowHeightPx && canMoveDown) {
+                            onMoveDown()
+                            dragY -= rowHeightPx
+                        }
+                    },
+                    onDragEnd = {
+                        dragging = false
+                        dragY = 0f
+                    },
+                    onDragCancel = {
+                        dragging = false
+                        dragY = 0f
+                    },
+                )
+            },
     ) {
         Text(
             label,

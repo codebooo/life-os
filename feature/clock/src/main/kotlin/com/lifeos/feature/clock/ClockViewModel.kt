@@ -22,6 +22,8 @@ sealed interface ClockUiEvent {
     data class SelectFace(val index: Int) : ClockUiEvent
     data class ZoneDraftChanged(val value: String) : ClockUiEvent
     data object AddZone : ClockUiEvent
+    /** Map tap: derive the UTC-offset zone from the longitude and add it. */
+    data class AddZoneFromMap(val longitude: Double) : ClockUiEvent
     data class RemoveZone(val zoneId: String) : ClockUiEvent
     data object DismissMessage : ClockUiEvent
 }
@@ -59,6 +61,22 @@ class ClockViewModel @Inject constructor(
                 val current = settingsRepository.worldClocks.first()
                 if (zone !in current) settingsRepository.setWorldClocks(current + zone)
                 updateState { it.copy(zoneDraft = "") }
+            }
+            is ClockUiEvent.AddZoneFromMap -> viewModelScope.launch {
+                // 15° of longitude ≈ 1 hour; Etc/GMT ids are sign-INVERTED (Etc/GMT-2 = UTC+2).
+                val offset = Math.round(event.longitude / 15.0).toInt().coerceIn(-12, 14)
+                val zone = when {
+                    offset == 0 -> "Etc/GMT"
+                    offset > 0 -> "Etc/GMT-$offset"
+                    else -> "Etc/GMT+${-offset}"
+                }
+                val current = settingsRepository.worldClocks.first()
+                if (zone !in current) {
+                    settingsRepository.setWorldClocks(current + zone)
+                    updateState { it.copy(message = "Added UTC${if (offset >= 0) "+" else ""}$offset") }
+                } else {
+                    updateState { it.copy(message = "UTC${if (offset >= 0) "+" else ""}$offset is already on your list") }
+                }
             }
             is ClockUiEvent.RemoveZone -> viewModelScope.launch {
                 val current = settingsRepository.worldClocks.first()

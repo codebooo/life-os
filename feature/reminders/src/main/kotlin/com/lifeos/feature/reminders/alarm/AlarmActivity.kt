@@ -1,12 +1,6 @@
 package com.lifeos.feature.reminders.alarm
 
-import android.media.AudioAttributes
-import android.media.MediaPlayer
-import android.media.RingtoneManager
 import android.os.Bundle
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -32,12 +26,9 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Full-screen alarm surface shown over the lockscreen (§Module 2).
- *
- * Sound strategy (how Samsung Clock does it): notification-channel sounds are
- * muted by silent/DND, so this activity plays a *looping ringtone on the
- * ALARM audio stream* itself — the alarm stream ignores silent mode — plus a
- * repeating vibration, both stopped on Done/Snooze/close.
+ * Full-screen alarm face shown over the lockscreen (§Module 2). The ringing
+ * itself lives in [AlarmService] (foreground, ALARM stream — silent-mode
+ * proof); this screen just presents Done/Snooze and stops the service.
  */
 @AndroidEntryPoint
 class AlarmActivity : ComponentActivity() {
@@ -45,14 +36,10 @@ class AlarmActivity : ComponentActivity() {
     @Inject
     lateinit var remindersRepository: RemindersRepository
 
-    private var player: MediaPlayer? = null
-    private var vibrator: Vibrator? = null
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setShowWhenLocked(true)
         setTurnScreenOn(true)
-        startAlarmSound()
 
         val reminderId = intent.getLongExtra(ReminderAlarmReceiver.EXTRA_REMINDER_ID, -1L)
         val title = intent.getStringExtra(ReminderAlarmReceiver.EXTRA_TITLE) ?: "Reminder"
@@ -79,7 +66,7 @@ class AlarmActivity : ComponentActivity() {
                             OutlinedButton(onClick = { snooze(reminderId) }) {
                                 Text("Snooze 10 min")
                             }
-                            Button(onClick = { finish() }) {
+                            Button(onClick = { dismiss() }) {
                                 Text("Done")
                             }
                         }
@@ -89,7 +76,13 @@ class AlarmActivity : ComponentActivity() {
         }
     }
 
+    private fun dismiss() {
+        AlarmService.stop(this)
+        finish()
+    }
+
     private fun snooze(reminderId: Long) {
+        AlarmService.stop(this)
         if (reminderId != -1L) {
             CoroutineScope(Dispatchers.IO).launch {
                 remindersRepository.snooze(reminderId, byMinutes = 10)
@@ -98,47 +91,9 @@ class AlarmActivity : ComponentActivity() {
         finish()
     }
 
-    /** Looping alarm ringtone on USAGE_ALARM + repeating vibration. */
-    private fun startAlarmSound() {
-        val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
-            ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
-            ?: return
-        runCatching {
-            player = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .build(),
-                )
-                setDataSource(this@AlarmActivity, uri)
-                isLooping = true
-                prepare()
-                start()
-            }
-        }
-        runCatching {
-            vibrator = getSystemService(VibratorManager::class.java).defaultVibrator.also {
-                it.vibrate(
-                    VibrationEffect.createWaveform(longArrayOf(0, 500, 400, 500, 400, 800), 0),
-                    android.os.VibrationAttributes.createForUsage(android.os.VibrationAttributes.USAGE_ALARM),
-                )
-            }
-        }
-    }
-
-    private fun stopAlarmSound() {
-        runCatching {
-            player?.stop()
-            player?.release()
-        }
-        player = null
-        vibrator?.cancel()
-        vibrator = null
-    }
-
     override fun onDestroy() {
-        stopAlarmSound()
+        // Back-gesture or system dismiss should silence the alarm too.
+        AlarmService.stop(this)
         super.onDestroy()
     }
 }

@@ -58,6 +58,16 @@ internal fun RemindersScreen(uiState: RemindersUiState, onEvent: (RemindersUiEve
     }
 
     Scaffold(
+        topBar = {
+            androidx.compose.material3.TopAppBar(
+                title = { Text("Reminders") },
+                actions = {
+                    androidx.compose.material3.TextButton(onClick = { onEvent(RemindersUiEvent.TestAlarm) }) {
+                        Text("Test alarm")
+                    }
+                },
+            )
+        },
         floatingActionButton = {
             FloatingActionButton(onClick = { onEvent(RemindersUiEvent.ToggleEditor) }) {
                 Icon(Icons.Filled.Add, contentDescription = "New reminder")

@@ -7,7 +7,7 @@ or on your own NAS (Ollama). No third-party cloud, ever.
 **Spec:** [`docs/PRODUCTION_PLAN.md`](docs/PRODUCTION_PLAN.md). Every module
 and rule traces back to a section (and often a community demand source) there.
 
-## Status — v0.1.0-alpha.7
+## Status — v0.1.0-alpha.8
 
 | Area | State |
 |---|---|
@@ -33,6 +33,8 @@ and rule traces back to a section (and often a community demand source) there.
 | Evolution layer: on-device interaction log + planner accept-rate; Planner accept/skip feeds it | ✅ |
 | Calendar: one-way system Calendar Provider mirror + iCalendar (RFC 5545) codec (Proton ICS bridge, §8.6) | ✅ |
 | Mail MCP client (JSON-RPC over HTTP/SSE) for the NAS Proton mail MCP; IMAP fallback stays primary | ✅ |
+| Assistant overlay (Gemini-style): long-press home floats a glowing-border panel over any app — auto-listens (Vosk), text input, deep module commands (timers, packages, planner, to-dos) + AI fallback | ✅ |
+| Foreground AlarmService rings reminders on the ALARM stream (silent-mode/app-killed proof) + "Test alarm" button; Clock gains a tap-to-add time-zone map and a zone converter | ✅ |
 | Deferred post-alpha: Glance home-screen widgets, HA WebSocket live state/zones, Vault unlock UI, first-run onboarding checklist (grants live in Settings → System access), FinTS bank sync | 🔜 |
 
 **Google-free by design:** no Google service is ever called at runtime (no Play Services, no Google recognizer, no Google Maps). Remaining Google-*authored* open-source, fully on-device libraries: AndroidX/Jetpack (unavoidable on Android), MediaPipe (Gemma inference), ML Kit on-device OCR/barcode (no network) — swap candidates documented in the plan.
@@ -42,7 +44,7 @@ and rule traces back to a section (and often a community demand source) there.
 Grab `lifeos-v*.apk` from [Releases](../../releases), then:
 
 ```
-adb install -r -g lifeos-v0.1.0-alpha.7.apk
+adb install -r -g lifeos-v0.1.0-alpha.8.apk
 ```
 
 or copy to the phone and allow *Install unknown apps*. Android 13+ (minSdk 33).
