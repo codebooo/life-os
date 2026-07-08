@@ -3,6 +3,8 @@ package com.lifeos.feature.clock
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -88,7 +90,7 @@ fun ClockRoute(viewModel: ClockViewModel = hiltViewModel()) {
     ) { innerPadding ->
         Column(modifier = Modifier.padding(innerPadding)) {
             PrimaryScrollableTabRow(selectedTabIndex = uiState.tab, edgePadding = 12.dp) {
-                listOf("Faces", "World", "Stopwatch", "Timer").forEachIndexed { index, label ->
+                listOf("Faces", "World", "Map", "Convert", "Stopwatch", "Timer").forEachIndexed { index, label ->
                     Tab(
                         selected = uiState.tab == index,
                         onClick = { viewModel.onEvent(ClockUiEvent.SelectTab(index)) },
@@ -99,7 +101,9 @@ fun ClockRoute(viewModel: ClockViewModel = hiltViewModel()) {
             when (uiState.tab) {
                 0 -> FacesTab(uiState.face) { viewModel.onEvent(ClockUiEvent.SelectFace(it)) }
                 1 -> WorldTab(uiState, viewModel::onEvent)
-                2 -> StopwatchTab()
+                2 -> TimeZoneMapTab(viewModel::onEvent)
+                3 -> ConvertTab(uiState)
+                4 -> StopwatchTab()
                 else -> TimerTab()
             }
         }
@@ -241,7 +245,7 @@ private fun WorldTab(uiState: ClockUiState, onEvent: (ClockUiEvent) -> Unit) {
             items(uiState.worldClocks, key = { it }) { zoneId ->
                 val time = ZonedDateTime.now(ZoneId.of(zoneId))
                 ListItem(
-                    headlineContent = { Text(zoneId.substringAfterLast('/').replace('_', ' ')) },
+                    headlineContent = { Text(friendlyZone(zoneId)) },
                     supportingContent = { Text(zoneId) },
                     trailingContent = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -258,6 +262,139 @@ private fun WorldTab(uiState: ClockUiState, onEvent: (ClockUiEvent) -> Unit) {
             }
         }
     }
+}
+
+/**
+ * Time-zone picker map (§Module 4): tap anywhere to add that longitude's
+ * UTC-offset zone to the world-clock list. Native osmdroid — no Google.
+ */
+@Composable
+private fun TimeZoneMapTab(onEvent: (ClockUiEvent) -> Unit) {
+    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "Tap a place on the map — its time zone joins your world clocks.",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        androidx.compose.ui.viewinterop.AndroidView(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            factory = { ctx ->
+                org.osmdroid.config.Configuration.getInstance().userAgentValue = "LifeOS/0.1 (personal)"
+                org.osmdroid.config.Configuration.getInstance().osmdroidBasePath =
+                    ctx.cacheDir.resolve("osmdroid")
+                org.osmdroid.views.MapView(ctx).apply {
+                    setTileSource(org.osmdroid.tileprovider.tilesource.TileSourceFactory.MAPNIK)
+                    setMultiTouchControls(true)
+                    controller.setZoom(2.5)
+                    controller.setCenter(org.osmdroid.util.GeoPoint(20.0, 0.0))
+                    overlays.add(
+                        org.osmdroid.views.overlay.MapEventsOverlay(
+                            object : org.osmdroid.events.MapEventsReceiver {
+                                override fun singleTapConfirmedHelper(p: org.osmdroid.util.GeoPoint?): Boolean {
+                                    p ?: return false
+                                    onEvent(ClockUiEvent.AddZoneFromMap(p.longitude))
+                                    return true
+                                }
+
+                                override fun longPressHelper(p: org.osmdroid.util.GeoPoint?) = false
+                            },
+                        ),
+                    )
+                }
+            },
+            onRelease = { it.onDetach() },
+        )
+    }
+}
+
+/** Time-zone converter (§Module 4): convert an HH:MM between any two zones. */
+@Composable
+private fun ConvertTab(uiState: ClockUiState) {
+    val deviceZone = ZoneId.systemDefault().id
+    val zones = remember(uiState.worldClocks) {
+        (listOf(deviceZone, "UTC") + uiState.worldClocks).distinct()
+    }
+    var fromZone by remember { mutableStateOf(deviceZone) }
+    var toZone by remember { mutableStateOf(zones.getOrElse(1) { "UTC" }) }
+    var hourText by remember { mutableStateOf("12") }
+    var minuteText by remember { mutableStateOf("00") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Text("From", style = MaterialTheme.typography.labelLarge)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+        ) {
+            zones.forEach { zone ->
+                FilterChip(
+                    selected = fromZone == zone,
+                    onClick = { fromZone = zone },
+                    label = { Text(friendlyZone(zone), maxLines = 1) },
+                )
+            }
+        }
+        Text("To", style = MaterialTheme.typography.labelLarge)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState()),
+        ) {
+            zones.forEach { zone ->
+                FilterChip(
+                    selected = toZone == zone,
+                    onClick = { toZone = zone },
+                    label = { Text(friendlyZone(zone), maxLines = 1) },
+                )
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = hourText,
+                onValueChange = { hourText = it },
+                label = { Text("Hour") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            OutlinedTextField(
+                value = minuteText,
+                onValueChange = { minuteText = it },
+                label = { Text("Min") },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        val hour = hourText.toIntOrNull()?.coerceIn(0, 23)
+        val minute = minuteText.toIntOrNull()?.coerceIn(0, 59)
+        if (hour != null && minute != null) {
+            val converted = java.time.LocalDate.now(ZoneId.of(fromZone))
+                .atTime(hour, minute)
+                .atZone(ZoneId.of(fromZone))
+                .withZoneSameInstant(ZoneId.of(toZone))
+            Text(
+                "%02d:%02d in %s".format(hour, minute, friendlyZone(fromZone)),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                converted.format(DateTimeFormatter.ofPattern("HH:mm")) +
+                    " in ${friendlyZone(toZone)}" +
+                    if (converted.toLocalDate() != java.time.LocalDate.now(ZoneId.of(fromZone))) " (next/prev day)" else "",
+                style = MaterialTheme.typography.displaySmall,
+            )
+        }
+    }
+}
+
+/** "Etc/GMT-2" reads as UTC+2 (the ids are sign-inverted); cities keep their name. */
+internal fun friendlyZone(zoneId: String): String = when {
+    zoneId == "Etc/GMT" || zoneId == "UTC" -> "UTC"
+    zoneId.startsWith("Etc/GMT-") -> "UTC+${zoneId.removePrefix("Etc/GMT-")}"
+    zoneId.startsWith("Etc/GMT+") -> "UTC-${zoneId.removePrefix("Etc/GMT+")}"
+    else -> zoneId.substringAfterLast('/').replace('_', ' ')
 }
 
 @Composable

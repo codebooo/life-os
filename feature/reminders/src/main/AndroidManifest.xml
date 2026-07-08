@@ -7,12 +7,21 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
     <application>
 
         <receiver
             android:name="com.lifeos.feature.reminders.alarm.ReminderAlarmReceiver"
             android:exported="false" />
+
+        <!-- Rings on the ALARM stream from the foreground so sound survives
+             silent mode, app death, and suppressed activity launches. -->
+        <service
+            android:name="com.lifeos.feature.reminders.alarm.AlarmService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <receiver
             android:name="com.lifeos.feature.reminders.alarm.ReminderBootReceiver"

@@ -28,6 +28,8 @@ sealed interface RemindersUiEvent {
     data object Save : RemindersUiEvent
     data class SetEnabled(val id: Long, val enabled: Boolean) : RemindersUiEvent
     data class Delete(val id: Long) : RemindersUiEvent
+    /** Schedules a real alarm 10 seconds out to verify sound + full-screen. */
+    data object TestAlarm : RemindersUiEvent
     data object DismissError : RemindersUiEvent
 }
 
@@ -73,6 +75,13 @@ class RemindersViewModel @Inject constructor(
             }
             is RemindersUiEvent.Delete -> viewModelScope.launch {
                 remindersRepository.delete(event.id)
+            }
+            RemindersUiEvent.TestAlarm -> viewModelScope.launch {
+                remindersRepository.create(
+                    title = "Alarm test — it works!",
+                    at = System.currentTimeMillis() + 10_000L,
+                )
+                updateState { it.copy(error = "Test alarm set — lock the phone, it rings in 10 s") }
             }
             RemindersUiEvent.DismissError -> updateState { it.copy(error = null) }
         }
