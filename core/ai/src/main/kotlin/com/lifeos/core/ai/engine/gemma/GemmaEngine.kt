@@ -137,24 +137,43 @@ class GemmaEngine @Inject constructor(
             .trim()
     }
 
-    /** Flattens the chat into Gemma's plain-text turn format. */
-    private fun buildPrompt(request: AiRequest): String = buildString {
-        request.system?.let { appendLine(it).appendLine() }
-        request.messages.forEach { message ->
+    /**
+     * Flattens the chat into Gemma's plain-text turn format, dropping the
+     * OLDEST turns first when the prompt would eat into the output budget
+     * (maxTokens covers input + output, so an unbounded prompt = a truncated
+     * answer). System prompt and the newest user turn always survive.
+     */
+    private fun buildPrompt(request: AiRequest): String {
+        val header = buildString {
+            request.system?.let { appendLine(it).appendLine() }
+        }
+        val turns = request.messages.map { message ->
             when (message.role) {
-                AiRole.SYSTEM -> appendLine(message.content).appendLine()
-                AiRole.USER -> appendLine("<start_of_turn>user\n${message.content}<end_of_turn>")
-                AiRole.ASSISTANT -> appendLine("<start_of_turn>model\n${message.content}<end_of_turn>")
+                AiRole.SYSTEM -> message.content + "\n"
+                AiRole.USER -> "<start_of_turn>user\n${message.content}<end_of_turn>\n"
+                AiRole.ASSISTANT -> "<start_of_turn>model\n${message.content}<end_of_turn>\n"
             }
         }
-        append("<start_of_turn>model\n")
+        val kept = ArrayDeque<String>()
+        var budget = MAX_PROMPT_CHARS - header.length
+        for (turn in turns.asReversed()) {
+            if (budget - turn.length < 0 && kept.isNotEmpty()) break
+            kept.addFirst(turn)
+            budget -= turn.length
+        }
+        return header + kept.joinToString("") + "<start_of_turn>model\n"
     }
 
     private companion object {
         const val TAG = "GemmaEngine"
-        // Lower than before (2048): shorter answers decode much faster on CPU
-        // and use far less RAM, which is what actually matters on-device.
-        const val MAX_TOKENS = 512
+        // MediaPipe's maxTokens is the whole context window — INPUT + output.
+        // 512 left almost no output budget once a few history turns were in the
+        // prompt, which is what truncated answers mid-sentence. 1024 with a
+        // trimmed prompt keeps decoding fast while leaving real room to answer.
+        const val MAX_TOKENS = 1024
+        // ~4 chars/token: keep the prompt under half the window so at least
+        // half is always left for the reply, whatever the caller sends.
+        const val MAX_PROMPT_CHARS = 2000
         const val GENERATE_TIMEOUT_MS = 90_000L
     }
 }
