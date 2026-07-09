@@ -11,13 +11,16 @@ import com.lifeos.core.common.coroutines.DispatcherProvider
 import com.lifeos.core.common.log.LifeLogger
 import com.lifeos.core.datastore.AiConfigRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import java.io.File
+import java.util.concurrent.Executors
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,27 +45,46 @@ class GemmaEngine @Inject constructor(
     private var llm: LlmInference? = null
     private var loadedModelPath: String? = null
 
+    // A dedicated single background thread so inference NEVER competes with the
+    // shared IO pool (which the whole app uses) — that competition, plus the
+    // GPU delegate, is what froze the device. CPU backend only.
+    private val inferenceDispatcher = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "gemma-inference").apply { priority = Thread.NORM_PRIORITY - 1 }
+    }.asCoroutineDispatcher()
+
     override suspend fun isAvailable(): Boolean = modelFile()?.exists() == true
 
     /**
-     * Runs the prompt on the GPU backend (the big speed win vs the old
-     * CPU-only default — that's why Edge Gallery felt far faster). Access is
-     * serialized via [mutex]; one chunk is emitted with the full answer.
+     * Runs the prompt on the CPU backend, on a dedicated low-priority thread,
+     * with a hard [GENERATE_TIMEOUT_MS] ceiling. Failsafes: any load/generate
+     * error or timeout releases the model and surfaces a clean failure instead
+     * of wedging — a hung inference can never brick the device again.
      */
     override fun stream(request: AiRequest): Flow<AiChunk> = flow {
         val file = modelFile()
         check(file != null && file.exists()) { "No on-device model at ${file?.absolutePath}" }
 
         val text = mutex.withLock {
-            val inference = loadIfNeeded(file.absolutePath)
-            inference.generateResponse(buildPrompt(request))
+            try {
+                withTimeout(GENERATE_TIMEOUT_MS) {
+                    val inference = loadIfNeeded(file.absolutePath)
+                    inference.generateResponse(buildPrompt(request))
+                }
+            } catch (t: Throwable) {
+                // Poisoned session/OOM/timeout — drop the model so the next try is clean.
+                LifeLogger.e(TAG, "Inference failed; releasing model", t)
+                runCatching { llm?.close() }
+                llm = null
+                loadedModelPath = null
+                throw t
+            }
         }
         emit(AiChunk(text = text.orEmpty(), done = true))
-    }.flowOn(dispatchers.io)
+    }.flowOn(inferenceDispatcher)
 
     /** Frees the model memory (called from onTrimMemory via the app). */
     suspend fun release() = mutex.withLock {
-        llm?.close()
+        runCatching { llm?.close() }
         llm = null
         loadedModelPath = null
         LifeLogger.i(TAG, "Model released")
@@ -73,13 +95,14 @@ class GemmaEngine @Inject constructor(
         if (current != null && loadedModelPath == path) return current
         current?.close()
 
-        LifeLogger.i(TAG, "Loading on-device model from $path (GPU)")
+        LifeLogger.i(TAG, "Loading on-device model from $path (CPU)")
         val options = LlmInference.LlmInferenceOptions.builder()
             .setModelPath(path)
+            // Smaller cap = faster answers and far less memory pressure than 2048.
             .setMaxTokens(MAX_TOKENS)
-            // GPU backend — the difference between Edge-Gallery-fast and the
-            // old CPU crawl. Falls back to CPU internally if unavailable.
-            .setPreferredBackend(LlmInference.Backend.GPU)
+            // CPU backend on purpose: the GPU delegate froze the S22 Ultra
+            // compositor. Reliability over raw speed for on-device.
+            .setPreferredBackend(LlmInference.Backend.CPU)
             .build()
         return LlmInference.createFromOptions(context, options).also {
             llm = it
@@ -110,6 +133,9 @@ class GemmaEngine @Inject constructor(
 
     private companion object {
         const val TAG = "GemmaEngine"
-        const val MAX_TOKENS = 2048
+        // Lower than before (2048): shorter answers decode much faster on CPU
+        // and use far less RAM, which is what actually matters on-device.
+        const val MAX_TOKENS = 512
+        const val GENERATE_TIMEOUT_MS = 90_000L
     }
 }

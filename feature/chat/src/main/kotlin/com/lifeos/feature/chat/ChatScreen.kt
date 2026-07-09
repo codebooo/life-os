@@ -81,7 +81,7 @@ internal fun ChatScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Assistant") },
+                title = { Text("Jarvis") },
                 actions = {
                     uiState.activeEngine?.let { engine ->
                         AssistChip(onClick = {}, label = { Text(engine.label) })

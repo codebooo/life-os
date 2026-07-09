@@ -108,7 +108,7 @@ class LifeAssistantSession(
 
             addView(
                 TextView(context).apply {
-                    text = "LifeOS"
+                    text = "Jarvis"
                     setTextColor(Color.parseColor("#8AB4F8"))
                     textSize = 13f
                     setTypeface(typeface, Typeface.BOLD)
