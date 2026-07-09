@@ -109,9 +109,10 @@ internal class DefaultChatRepository @Inject constructor(
             return@flow
         }
 
-        // Small on-device models degrade with long transcripts — keep the last
-        // few turns only. (NAS models handle more, but this keeps latency sane.)
-        val trimmedHistory = history.takeLast(6)
+        // Small on-device models degrade with long transcripts, and Gemma's
+        // maxTokens budget covers input AND output — an oversized prompt eats
+        // the answer's budget and truncates it mid-sentence. Keep it tight.
+        val trimmedHistory = history.takeLast(4).map { it.copy(content = it.content.take(500)) }
         val request = AiRequest(messages = trimmedHistory, system = SYSTEM_PROMPT)
         aiRouter.stream(request).collect { event ->
             when (event) {
@@ -152,6 +153,11 @@ internal class DefaultChatRepository @Inject constructor(
         const val SYSTEM_PROMPT =
             "You are Jarvis, a private on-device assistant for LifeOS. " +
                 "Answer directly in 1-3 short sentences. Plain text only — never output XML, " +
-                "role markers, or <start_of_turn>/<end_of_turn> tokens."
+                "role markers, or <start_of_turn>/<end_of_turn> tokens. " +
+                "You cannot create, change, complete or delete anything — LifeOS runs module " +
+                "commands itself before you see the message. Never claim you added, closed, " +
+                "set or removed something, and never invent tasks, reminders or events. " +
+                "If asked to perform an action, say the command wasn't recognized and suggest " +
+                "rephrasing (e.g. \"add X to my to-do list\")."
     }
 }

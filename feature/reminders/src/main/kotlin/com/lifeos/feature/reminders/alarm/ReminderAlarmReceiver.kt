@@ -40,11 +40,17 @@ class ReminderAlarmReceiver : BroadcastReceiver() {
         if (reminderId == -1L) return
         val title = intent.getStringExtra(EXTRA_TITLE)
 
-        showNotification(context, reminderId, title)
-
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                // Re-check the DB: reminders cancelled after scheduling (e.g. via
+                // Jarvis) leave a stale AlarmManager slot — those must stay silent.
+                val reminder = remindersRepository.get(reminderId)
+                if (reminder == null || !reminder.enabled) {
+                    LifeLogger.i(TAG, "Reminder $reminderId gone or disabled — skipping alarm")
+                    return@launch
+                }
+                showNotification(context, reminderId, reminder.title.ifBlank { title ?: "Reminder" })
                 remindersRepository.onFired(reminderId)
             } finally {
                 pending.finish()

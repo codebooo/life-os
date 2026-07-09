@@ -24,6 +24,7 @@ interface RemindersRepository {
         source: SourceRef? = null,
     ): LifeResult<Long>
 
+    suspend fun get(reminderId: Long): ReminderEntity?
     suspend fun setEnabled(reminderId: Long, enabled: Boolean)
     suspend fun delete(reminderId: Long)
     suspend fun snooze(reminderId: Long, byMinutes: Int): LifeResult<Long>
@@ -66,6 +67,10 @@ internal class DefaultRemindersRepository @Inject constructor(
             scheduler.schedule(reminder.copy(id = id))
             id
         }
+    }
+
+    override suspend fun get(reminderId: Long): ReminderEntity? = withContext(dispatchers.io) {
+        reminderDao.getById(reminderId)
     }
 
     override suspend fun setEnabled(reminderId: Long, enabled: Boolean) =

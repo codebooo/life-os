@@ -6,7 +6,6 @@ import com.lifeos.core.ai.model.AiRequest
 import com.lifeos.core.ai.model.AiRole
 import com.lifeos.core.common.result.LifeResult
 import com.lifeos.core.database.capture.TaskEntity
-import com.lifeos.core.database.dhl.PackageDao
 import com.lifeos.core.database.todo.TodoDao
 import com.lifeos.core.model.LifeModule
 import com.lifeos.core.model.SourceRef
@@ -14,6 +13,7 @@ import com.lifeos.core.service.LifeAction
 import com.lifeos.core.service.LifeActionDispatcher
 import com.lifeos.feature.capture.data.CaptureDestination
 import com.lifeos.feature.capture.data.SmartCaptureParser
+import com.lifeos.feature.chat.data.ChatCommandHandler
 import com.lifeos.feature.planner.data.PlannerEngine
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -31,9 +31,9 @@ import javax.inject.Singleton
 class AssistantBrain @Inject constructor(
     private val aiRouter: AiRouter,
     private val actionDispatcher: LifeActionDispatcher,
-    private val packageDao: PackageDao,
     private val todoDao: TodoDao,
     private val plannerEngine: PlannerEngine,
+    private val commandHandler: ChatCommandHandler,
 ) {
 
     suspend fun handle(query: String): String {
@@ -41,7 +41,19 @@ class AssistantBrain @Inject constructor(
         if (trimmed.isBlank()) return "I didn't catch that."
         val lower = trimmed.lowercase()
 
-        // 1. Timers / reminders / events / timed to-dos — instant, on-device.
+        // 1. "What's next" — the planner's ranked pick beats the plain to-do peek.
+        if (NEXT_WORDS.any { it in lower }) {
+            val next = plannerEngine.computePlan().firstOrNull()
+                ?: return "Nothing needs you right now. Enjoy the quiet."
+            return "Next up: ${next.title} (${next.reason})"
+        }
+
+        // 2. Jarvis's full module toolbox — the same tools as the chat tab
+        //    (create/complete/delete tasks, reminders, timers, events, notes,
+        //    cross-module search, packages, subscriptions, books, …).
+        commandHandler.tryHandle(trimmed)?.let { return it }
+
+        // 3. Looser natural-phrase capture ("6pm feed cat") — instant, on-device.
         SmartCaptureParser.detect(trimmed)?.let { smart ->
             val at = smart.at
             val time = at?.let { CLOCK.format(Date(it)) }
@@ -87,41 +99,16 @@ class AssistantBrain @Inject constructor(
             }
         }
 
-        // 2. Package tracking — live module data.
-        if (PACKAGE_WORDS.any { it in lower }) {
-            val packages = packageDao.activePackages()
-            return when {
-                packages.isEmpty() -> "No packages are being tracked right now."
-                else -> packages.joinToString("\n") { pkg ->
-                    val name = pkg.label ?: pkg.trackingNumber
-                    val status = pkg.statusDescription ?: pkg.status.lowercase().replace('_', ' ')
-                    val eta = pkg.estimatedDeliveryAt?.let { " — expected ${DAY.format(Date(it))}" } ?: ""
-                    "$name: $status$eta"
-                }
-            }
-        }
-
-        // 3. "What's next" — the planner's top pick.
-        if (NEXT_WORDS.any { it in lower }) {
-            val next = plannerEngine.computePlan().firstOrNull()
-                ?: return "Nothing needs you right now. Enjoy the quiet."
-            return "Next up: ${next.title} (${next.reason})"
-        }
-
-        // 4. Open to-dos.
-        if ("todo" in lower || "to-do" in lower || "tasks" in lower) {
-            val next = todoDao.nextOpenTask() ?: return "Your to-do list is clear."
-            return "Most urgent open task: ${next.title}"
-        }
-
-        // 5. Everything else → the AI router (on-device or NAS).
+        // 4. Everything else → the AI router (on-device or NAS).
         return fallback(trimmed)
     }
 
     private suspend fun fallback(query: String): String {
         val result = aiRouter.complete(
             AiRequest(
-                system = "You are LifeOS, a private on-device assistant. Answer in at most 3 short sentences.",
+                system = "You are Jarvis, LifeOS's private on-device assistant. Answer in at most " +
+                    "3 short sentences, plain text. You cannot create, change or delete anything — " +
+                    "never claim you performed an action or invent tasks/reminders.",
                 messages = listOf(AiMessage(AiRole.USER, query)),
             ),
         )
@@ -136,8 +123,6 @@ class AssistantBrain @Inject constructor(
     private companion object {
         val SOURCE = SourceRef(LifeModule.CHAT, "assistant-overlay")
         val CLOCK = SimpleDateFormat("HH:mm", Locale.getDefault())
-        val DAY = SimpleDateFormat("EEE d MMM", Locale.getDefault())
-        val PACKAGE_WORDS = listOf("package", "paket", "parcel", "delivery", "shipment", "tracking")
         val NEXT_WORDS = listOf("what's next", "whats next", "what now", "my plan", "next up")
     }
 }
