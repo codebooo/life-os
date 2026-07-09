@@ -254,6 +254,17 @@ fun SettingsRoute(
                     )
                 }
             }
+            if (android.os.Build.VERSION.SDK_INT >= 31) {
+                SystemSettingRow(
+                    title = "Alarms & reminders",
+                    subtitle = "Let reminders fire at the exact time, even in Doze",
+                ) {
+                    context.startActivity(
+                        Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
+                            .setData(android.net.Uri.parse("package:${context.packageName}")),
+                    )
+                }
+            }
 
             SectionHeader(title = "About")
             Card(modifier = Modifier.padding(bottom = 24.dp)) {

@@ -109,7 +109,10 @@ internal class DefaultChatRepository @Inject constructor(
             return@flow
         }
 
-        val request = AiRequest(messages = history, system = SYSTEM_PROMPT)
+        // Small on-device models degrade with long transcripts — keep the last
+        // few turns only. (NAS models handle more, but this keeps latency sane.)
+        val trimmedHistory = history.takeLast(6)
+        val request = AiRequest(messages = trimmedHistory, system = SYSTEM_PROMPT)
         aiRouter.stream(request).collect { event ->
             when (event) {
                 is AiRouter.StreamEvent.EngineSelected -> {
@@ -147,8 +150,8 @@ internal class DefaultChatRepository @Inject constructor(
         const val ROLE_USER = "user"
         const val ROLE_ASSISTANT = "assistant"
         const val SYSTEM_PROMPT =
-            "You are LifeOS, a private on-device life assistant. Be concise, practical and direct. " +
-                "If a question needs reasoning, you MAY put your step-by-step thinking inside " +
-                "<think>...</think> first, then give the final answer after </think>. Keep thinking brief."
+            "You are Jarvis, a private on-device assistant for LifeOS. " +
+                "Answer directly in 1-3 short sentences. Plain text only — never output XML, " +
+                "role markers, or <start_of_turn>/<end_of_turn> tokens."
     }
 }
