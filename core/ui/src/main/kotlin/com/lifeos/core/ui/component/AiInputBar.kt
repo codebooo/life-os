@@ -36,7 +36,7 @@ fun AiInputBar(
     onValueChange: (String) -> Unit,
     onSend: () -> Unit,
     modifier: Modifier = Modifier,
-    placeholder: String = "Ask or tell LifeOS anything",
+    placeholder: String = "Ask or tell Jarvis anything",
     busy: Boolean = false,
 ) {
     Surface(

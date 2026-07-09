@@ -45,7 +45,7 @@ enum class TopLevelDestination(
         route = LifeDestination.Inbox,
     ),
     ASSISTANT(
-        label = "Assistant",
+        label = "Jarvis",
         selectedIcon = Icons.Filled.AutoAwesome,
         unselectedIcon = Icons.Outlined.AutoAwesome,
         route = LifeDestination.Assistant,

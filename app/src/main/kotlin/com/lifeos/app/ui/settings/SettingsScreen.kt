@@ -134,7 +134,7 @@ fun SettingsRoute(
                 "CALENDAR" to "Calendar",
                 "TASKS" to "Tasks",
                 "INBOX" to "Inbox",
-                "ASSISTANT" to "Assistant",
+                "ASSISTANT" to "Jarvis",
             )
             // Enabled tabs first (orderable), then disabled ones to re-enable.
             uiState.navBarItems.forEachIndexed { index, id ->
