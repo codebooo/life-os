@@ -79,7 +79,7 @@ class GemmaEngine @Inject constructor(
                 throw t
             }
         }
-        emit(AiChunk(text = text.orEmpty(), done = true))
+        emit(AiChunk(text = sanitize(text), done = true))
     }.flowOn(inferenceDispatcher)
 
     /** Frees the model memory (called from onTrimMemory via the app). */
@@ -116,6 +116,25 @@ class GemmaEngine @Inject constructor(
         val modelsDir = context.getExternalFilesDir("models") ?: return null
         return modelsDir.listFiles()
             ?.firstOrNull { it.extension in setOf("task", "litertlm", "bin") }
+    }
+
+    /**
+     * Strips Gemma's turn/control tokens that the model sometimes echoes
+     * (`<end_of_turn>`, `<start_of_turn>`, `<eos>`) and truncates at the first
+     * end-of-turn so the answer never bleeds into a fake next turn.
+     */
+    private fun sanitize(raw: String?): String {
+        var t = raw.orEmpty()
+        listOf("<end_of_turn>", "<eos>", "<start_of_turn>").forEach { token ->
+            val cut = t.indexOf(token)
+            if (cut >= 0) t = t.substring(0, cut)
+        }
+        return t
+            .replace("<start_of_turn>model", "")
+            .replace(Regex("</?(start|end)_of_turn>"), "")
+            .replace("<eos>", "")
+            .replace("model\n", "")
+            .trim()
     }
 
     /** Flattens the chat into Gemma's plain-text turn format. */

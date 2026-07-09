@@ -30,10 +30,21 @@ class ReminderScheduler @Inject constructor(
             context.packageManager.getLaunchIntentForPackage(context.packageName),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        alarmManager.setAlarmClock(
-            AlarmManager.AlarmClockInfo(reminder.at, showIntent),
-            firePendingIntent(reminder.id, reminder.title),
-        )
+        val fire = firePendingIntent(reminder.id, reminder.title)
+        // setAlarmClock is exact + doze-proof and, for USE_EXACT_ALARM apps, needs
+        // no user grant. If the OEM still blocks it, fall back to an inexact wake
+        // so the reminder is late-but-never-lost rather than throwing.
+        try {
+            if (alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setAlarmClock(AlarmManager.AlarmClockInfo(reminder.at, showIntent), fire)
+            } else {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminder.at, fire)
+                LifeLogger.i(TAG, "Exact alarms not permitted — scheduled inexact")
+            }
+        } catch (se: SecurityException) {
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, reminder.at, fire)
+            LifeLogger.e(TAG, "Exact alarm denied; used inexact", se)
+        }
         LifeLogger.d(TAG, "Scheduled reminder ${reminder.id} at ${reminder.at}")
     }
 
