@@ -30,6 +30,8 @@ sealed interface LifeAction {
         val title: String,
         val at: Long,
         override val source: SourceRef,
+        /** NONE, DAILY, WEEKLY, MONTHLY, or "DAYS:n" for every-n-days cadences. */
+        val recurrence: String = "NONE",
     ) : LifeAction
 
     /** R1: start tracking a shipment (creates the package + delivery reminder). */

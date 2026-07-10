@@ -17,6 +17,7 @@ internal class RemindersActionHandler @Inject constructor(
         return when (val result = remindersRepository.create(
             title = create.title,
             at = create.at,
+            recurrence = create.recurrence,
             source = create.source,
         )) {
             is LifeResult.Success -> LifeResult.Success(result.value)

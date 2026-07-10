@@ -72,6 +72,19 @@ sealed interface LifeDestination {
 
     @Serializable
     data object Evolution : LifeDestination
+
+    @Serializable
+    data object Downloader : LifeDestination
+
+    @Serializable
+    data object Plants : LifeDestination
+
+    @Serializable
+    data object News : LifeDestination
+
+    /** Hidden: reachable only via the Home-title long-press reveal. */
+    @Serializable
+    data object Vault : LifeDestination
 }
 
 const val DEEP_LINK_SCHEME = "lifeos"

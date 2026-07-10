@@ -27,7 +27,13 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.LocalFlorist
+import androidx.compose.material.icons.filled.Newspaper
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.material3.ListItem
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -69,6 +75,7 @@ private data class AppGridItem(
  * Home (§7.6, minimal cut): the app grid for modules outside the bottom bar.
  * The ranked card feed and Planner top-card land in Phase 13.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     onNavigate: (LifeDestination) -> Unit,
@@ -171,7 +178,35 @@ fun HomeScreen(
             icon = Icons.Filled.Timeline,
             destination = LifeDestination.Evolution,
         ),
+        AppGridItem(
+            label = "Downloader",
+            description = "Private video & audio downloads",
+            icon = Icons.Filled.Download,
+            destination = LifeDestination.Downloader,
+        ),
+        AppGridItem(
+            label = "Plants",
+            description = "Care atlas + watering reminders",
+            icon = Icons.Filled.LocalFlorist,
+            destination = LifeDestination.Plants,
+        ),
+        AppGridItem(
+            label = "News",
+            description = "Headlines from credible sources",
+            icon = Icons.Filled.Newspaper,
+            destination = LifeDestination.News,
+        ),
     )
+
+    // Hidden Vault reveal (§Module Vault): long-press the "LifeOS" title and a
+    // lock appears for 5 seconds — the only way in. Biometrics gate the screen.
+    var vaultRevealed by remember { mutableStateOf(false) }
+    LaunchedEffect(vaultRevealed) {
+        if (vaultRevealed) {
+            kotlinx.coroutines.delay(5_000)
+            vaultRevealed = false
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -180,7 +215,27 @@ fun HomeScreen(
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text("LifeOS", style = MaterialTheme.typography.headlineMedium)
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Text(
+                    "LifeOS",
+                    style = MaterialTheme.typography.headlineMedium,
+                    modifier = Modifier.combinedClickable(
+                        indication = null,
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+                        onClick = {},
+                        onLongClick = { vaultRevealed = true },
+                    ),
+                )
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = vaultRevealed,
+                    enter = androidx.compose.animation.scaleIn() + androidx.compose.animation.fadeIn(),
+                    exit = androidx.compose.animation.scaleOut() + androidx.compose.animation.fadeOut(),
+                ) {
+                    IconButton(onClick = { onNavigate(LifeDestination.Vault) }) {
+                        Icon(Icons.Filled.Lock, contentDescription = "Vault", tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
             Row {
                 IconButton(onClick = { homeViewModel.toggleLayout() }) {
                     Icon(

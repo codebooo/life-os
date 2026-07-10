@@ -7,7 +7,7 @@ or on your own NAS (Ollama). No third-party cloud, ever.
 **Spec:** [`docs/PRODUCTION_PLAN.md`](docs/PRODUCTION_PLAN.md). Every module
 and rule traces back to a section (and often a community demand source) there.
 
-## Status — v0.1.0-alpha.13
+## Status — v0.1.0-alpha.14
 
 | Area | State |
 |---|---|
@@ -35,7 +35,9 @@ and rule traces back to a section (and often a community demand source) there.
 | Mail MCP client (JSON-RPC over HTTP/SSE) for the NAS Proton mail MCP; IMAP fallback stays primary | ✅ |
 | Assistant overlay (Gemini-style): long-press home floats a glowing-border panel over any app — auto-listens (Vosk), text input, deep module commands (timers, packages, planner, to-dos) + AI fallback | ✅ |
 | Foreground AlarmService rings reminders on the ALARM stream (silent-mode/app-killed proof) + "Test alarm" button; Clock gains a tap-to-add time-zone map and a zone converter | ✅ |
-| Jarvis toolbox v2: check-off/delete/cancel tools, fuzzy nouns ("tdo list"), stemmed cross-module search (notes/memex/captures/tasks/reminders/calendar/books), subscriptions + monthly spend + books + logger counters, honest no-parse fallback — the LLM can never claim fake actions; the overlay shares the same toolbox | ✅ |
+| Jarvis v3: chat is pure LLM (no pre-canned answers) — every module exposes live content via a prompt snapshot, and the model acts through `[[tool: args]]` lines the app executes + confirms (tasks, timers, reminders, events, notes, search); power phrases stay in the power menu/overlay | ✅ |
+| New modules: Downloader (on-device stream extraction → Downloads, incl. HLS), Plants (offline care atlas + every-N-days watering reminders), News (RSS tile scroll: tagesschau, ZEIT, SZ, DLF, taz), hidden Vault (long-press "LifeOS" title, biometric/PIN, encrypted gallery w/ sort) | ✅ |
+| Routes v2: tap-tap route planning with car/bike/foot timings + distance via OSRM, polyline on the osmdroid map | ✅ |
 | Deferred post-alpha: Glance home-screen widgets, HA WebSocket live state/zones, Vault unlock UI, first-run onboarding checklist (grants live in Settings → System access), FinTS bank sync | 🔜 |
 
 **Google-free by design:** no Google service is ever called at runtime (no Play Services, no Google recognizer, no Google Maps). Remaining Google-*authored* open-source, fully on-device libraries: AndroidX/Jetpack (unavoidable on Android), MediaPipe (Gemma inference), ML Kit on-device OCR/barcode (no network) — swap candidates documented in the plan.
@@ -45,7 +47,7 @@ and rule traces back to a section (and often a community demand source) there.
 Grab `lifeos-v*.apk` from [Releases](../../releases), then:
 
 ```
-adb install -r -g lifeos-v0.1.0-alpha.13.apk
+adb install -r -g lifeos-v0.1.0-alpha.14.apk
 ```
 
 or copy to the phone and allow *Install unknown apps*. Android 13+ (minSdk 33).
@@ -73,7 +75,7 @@ app/                   Shell: theme, bottom bar, NavHost, Home grid + planner ca
 core/{model,common,designsystem,database,datastore,network,ai,service,vault,ui}
 feature/{chat,capture,notes,reminders,todo,calendar,messagecenter,dhl,
          imagereasoning,finance,email,nas,books,route,smarthome,planner,
-         clock,adhd,memex,agentic,evolution}
+         clock,adhd,memex,agentic,evolution,downloader,plants,news,vault}
 build-logic/           Convention plugins
 docs/PRODUCTION_PLAN.md
 ```

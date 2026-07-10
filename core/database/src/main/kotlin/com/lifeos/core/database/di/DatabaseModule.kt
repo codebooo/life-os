@@ -21,6 +21,8 @@ import com.lifeos.core.database.memex.MemexDao
 import com.lifeos.core.database.agentic.MacroDao
 import com.lifeos.core.database.adhd.FocusDao
 import com.lifeos.core.database.evolution.EvolutionDao
+import com.lifeos.core.database.downloads.DownloadDao
+import com.lifeos.core.database.plants.PlantDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -91,4 +93,10 @@ internal object DatabaseModule {
 
     @Provides
     fun provideEvolutionDao(database: LifeDatabase): EvolutionDao = database.evolutionDao()
+
+    @Provides
+    fun provideDownloadDao(database: LifeDatabase): DownloadDao = database.downloadDao()
+
+    @Provides
+    fun providePlantDao(database: LifeDatabase): PlantDao = database.plantDao()
 }

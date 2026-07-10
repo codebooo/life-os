@@ -40,7 +40,7 @@ interface ChatRepository {
 internal class DefaultChatRepository @Inject constructor(
     private val chatDao: ChatDao,
     private val aiRouter: AiRouter,
-    private val commandHandler: ChatCommandHandler,
+    private val toolbox: JarvisToolbox,
 ) : ChatRepository {
 
     override fun observeConversations(): Flow<List<AiConversationEntity>> =
@@ -93,27 +93,17 @@ internal class DefaultChatRepository @Inject constructor(
             }
         }
 
-        // Deterministic module commands run first and actually DO the thing
-        // (add task, set reminder/timer/event, read packages/tasks). Only open
-        // questions fall through to the LLM. The context block from the AI
-        // Context sheet is stripped before matching so it never confuses intent.
-        val command = commandHandler.tryHandle(text.substringAfterLast("[/Context]").trim().ifBlank { text })
-        if (command != null) {
-            engine = AiEngineId.ON_DEVICE_GEMMA
-            emit(ReplyProgress.Started(convId, engine!!))
-            accumulated.append(command)
-            persistAssistant()
-            chatDao.touchConversation(convId, updatedAt = System.currentTimeMillis())
-            emit(ReplyProgress.Delta(command))
-            emit(ReplyProgress.Done(convId))
-            return@flow
-        }
-
+        // No pre-canned answers here (power phrases live in the power menu and
+        // overlay only): the LLM always writes the reply. It sees a live
+        // cross-module snapshot + a tool contract, and acts by emitting
+        // [[tool: args]] lines that the app executes after generation.
         // Small on-device models degrade with long transcripts, and Gemma's
         // maxTokens budget covers input AND output — an oversized prompt eats
         // the answer's budget and truncates it mid-sentence. Keep it tight.
-        val trimmedHistory = history.takeLast(4).map { it.copy(content = it.content.take(500)) }
-        val request = AiRequest(messages = trimmedHistory, system = SYSTEM_PROMPT)
+        val trimmedHistory = history.takeLast(4).map { it.copy(content = it.content.take(400)) }
+        val system = SYSTEM_PROMPT + "\n\n" + toolbox.toolSpec + "\n\n" +
+            runCatching { toolbox.snapshot() }.getOrDefault("")
+        val request = AiRequest(messages = trimmedHistory, system = system)
         aiRouter.stream(request).collect { event ->
             when (event) {
                 is AiRouter.StreamEvent.EngineSelected -> {
@@ -137,8 +127,15 @@ internal class DefaultChatRepository @Inject constructor(
         }
 
         if (accumulated.isNotEmpty()) {
+            // Execute any [[tool: args]] lines the model emitted; the final
+            // message is the cleaned reply + app-generated ✓ confirmations.
+            val acted = runCatching { toolbox.runActions(accumulated.toString()) }
+                .getOrDefault(accumulated.toString())
+            accumulated.setLength(0)
+            accumulated.append(acted)
             persistAssistant()
             chatDao.touchConversation(convId, updatedAt = System.currentTimeMillis())
+            emit(ReplyProgress.Delta(acted))
             emit(ReplyProgress.Done(convId))
         }
     }
@@ -154,10 +151,7 @@ internal class DefaultChatRepository @Inject constructor(
             "You are Jarvis, a private on-device assistant for LifeOS. " +
                 "Answer directly in 1-3 short sentences. Plain text only — never output XML, " +
                 "role markers, or <start_of_turn>/<end_of_turn> tokens. " +
-                "You cannot create, change, complete or delete anything — LifeOS runs module " +
-                "commands itself before you see the message. Never claim you added, closed, " +
-                "set or removed something, and never invent tasks, reminders or events. " +
-                "If asked to perform an action, say the command wasn't recognized and suggest " +
-                "rephrasing (e.g. \"add X to my to-do list\")."
+                "Answer questions about the user's data ONLY from LIVE DATA below — " +
+                "never invent tasks, reminders or events that aren't listed."
     }
 }

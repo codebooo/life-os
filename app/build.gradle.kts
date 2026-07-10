@@ -10,8 +10,8 @@ android {
 
     defaultConfig {
         applicationId = "com.lifeos"
-        versionCode = 13
-        versionName = "0.1.0-alpha.13"
+        versionCode = 14
+        versionName = "0.1.0-alpha.14"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -81,6 +81,10 @@ dependencies {
     implementation(projects.feature.memex)
     implementation(projects.feature.agentic)
     implementation(projects.feature.evolution)
+    implementation(projects.feature.downloader)
+    implementation(projects.feature.plants)
+    implementation(projects.feature.news)
+    implementation(projects.feature.vault)
 
     implementation(projects.core.model)
     implementation(projects.core.network)
@@ -101,6 +105,7 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.hilt.work)
     implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.fragment.ktx)
     implementation(libs.kotlinx.serialization.json)
 
     androidTestImplementation(libs.androidx.test.ext.junit)

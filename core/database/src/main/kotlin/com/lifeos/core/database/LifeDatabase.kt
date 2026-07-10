@@ -49,6 +49,10 @@ import com.lifeos.core.database.adhd.FocusDao
 import com.lifeos.core.database.adhd.FocusSessionEntity
 import com.lifeos.core.database.evolution.EvolutionDao
 import com.lifeos.core.database.evolution.InteractionLogEntity
+import com.lifeos.core.database.downloads.DownloadDao
+import com.lifeos.core.database.downloads.DownloadEntity
+import com.lifeos.core.database.plants.MyPlantEntity
+import com.lifeos.core.database.plants.PlantDao
 
 /**
  * The single app database (§1.7), feature-partitioned by package with
@@ -84,8 +88,10 @@ import com.lifeos.core.database.evolution.InteractionLogEntity
         MacroEntity::class,
         FocusSessionEntity::class,
         InteractionLogEntity::class,
+        DownloadEntity::class,
+        MyPlantEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -98,6 +104,7 @@ import com.lifeos.core.database.evolution.InteractionLogEntity
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
         AutoMigration(from = 10, to = 11),
+        AutoMigration(from = 11, to = 12),
     ],
 )
 abstract class LifeDatabase : RoomDatabase() {
@@ -119,6 +126,8 @@ abstract class LifeDatabase : RoomDatabase() {
     abstract fun macroDao(): MacroDao
     abstract fun focusDao(): FocusDao
     abstract fun evolutionDao(): EvolutionDao
+    abstract fun downloadDao(): DownloadDao
+    abstract fun plantDao(): PlantDao
 
     companion object {
         const val NAME = "life-os.db"
