@@ -45,6 +45,10 @@ import com.lifeos.feature.notes.NotesRoute
 import com.lifeos.feature.planner.PlannerRoute
 import com.lifeos.feature.route.RouteRoute
 import com.lifeos.feature.smarthome.SmartHomeRoute
+import com.lifeos.feature.downloader.DownloaderRoute
+import com.lifeos.feature.plants.PlantsRoute
+import com.lifeos.feature.news.NewsRoute
+import com.lifeos.feature.vault.VaultRoute
 
 /**
  * Single-activity app shell (§1.3): adaptive scaffold, short M3E bottom bar,
@@ -181,6 +185,10 @@ fun LifeOsApp(captureRequests: Int = 0, navBarIds: List<String> = emptyList()) {
             composable<LifeDestination.Memex> { MemexRoute() }
             composable<LifeDestination.Macros> { MacrosRoute() }
             composable<LifeDestination.Evolution> { EvolutionRoute() }
+            composable<LifeDestination.Downloader> { DownloaderRoute() }
+            composable<LifeDestination.Plants> { PlantsRoute() }
+            composable<LifeDestination.News> { NewsRoute() }
+            composable<LifeDestination.Vault> { VaultRoute() }
         }
     }
 

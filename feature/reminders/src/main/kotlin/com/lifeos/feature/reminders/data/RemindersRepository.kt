@@ -117,10 +117,14 @@ internal class DefaultRemindersRepository @Inject constructor(
     companion object {
         /** Next fire time for simple recurrences; null when non-recurring. */
         fun nextOccurrence(lastAt: Long, recurrence: String): Long? {
-            val interval = when (recurrence) {
-                "DAILY" -> TimeUnit.DAYS.toMillis(1)
-                "WEEKLY" -> TimeUnit.DAYS.toMillis(7)
-                "MONTHLY" -> TimeUnit.DAYS.toMillis(30)
+            val interval = when {
+                recurrence == "DAILY" -> TimeUnit.DAYS.toMillis(1)
+                recurrence == "WEEKLY" -> TimeUnit.DAYS.toMillis(7)
+                recurrence == "MONTHLY" -> TimeUnit.DAYS.toMillis(30)
+                // "DAYS:n" — every n days (plant watering & friends).
+                recurrence.startsWith("DAYS:") ->
+                    recurrence.removePrefix("DAYS:").toLongOrNull()?.let(TimeUnit.DAYS::toMillis)
+                        ?: return null
                 else -> return null
             }
             var next = lastAt + interval

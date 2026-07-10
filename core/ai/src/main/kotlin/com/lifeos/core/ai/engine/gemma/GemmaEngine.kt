@@ -170,10 +170,10 @@ class GemmaEngine @Inject constructor(
         // 512 left almost no output budget once a few history turns were in the
         // prompt, which is what truncated answers mid-sentence. 1024 with a
         // trimmed prompt keeps decoding fast while leaving real room to answer.
-        const val MAX_TOKENS = 1024
-        // ~4 chars/token: keep the prompt under half the window so at least
-        // half is always left for the reply, whatever the caller sends.
-        const val MAX_PROMPT_CHARS = 2000
+        const val MAX_TOKENS = 1280
+        // ~4 chars/token: keep the prompt bounded so a healthy share of the
+        // window is always left for the reply, whatever the caller sends.
+        const val MAX_PROMPT_CHARS = 2600
         const val GENERATE_TIMEOUT_MS = 90_000L
     }
 }
