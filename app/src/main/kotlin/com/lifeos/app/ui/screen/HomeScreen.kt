@@ -30,10 +30,13 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LocalFlorist
 import androidx.compose.material.icons.filled.Newspaper
+import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.compose.material3.ListItem
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -75,7 +78,6 @@ private data class AppGridItem(
  * Home (§7.6, minimal cut): the app grid for modules outside the bottom bar.
  * The ranked card feed and Planner top-card land in Phase 13.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(
     onNavigate: (LifeDestination) -> Unit,
@@ -196,6 +198,12 @@ fun HomeScreen(
             icon = Icons.Filled.Newspaper,
             destination = LifeDestination.News,
         ),
+        AppGridItem(
+            label = "Screen Time",
+            description = "Digital wellbeing, kept forever",
+            icon = Icons.Filled.Timelapse,
+            destination = LifeDestination.ScreenTime,
+        ),
     )
 
     // Hidden Vault reveal (§Module Vault): long-press the "LifeOS" title and a
@@ -219,12 +227,18 @@ fun HomeScreen(
                 Text(
                     "LifeOS",
                     style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.combinedClickable(
-                        indication = null,
-                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                        onClick = {},
-                        onLongClick = { vaultRevealed = true },
-                    ),
+                    // Hold for a full 5 seconds (not the ~0.5s system long-press) to
+                    // reveal the hidden Vault — deliberate, hard to trigger by accident.
+                    modifier = Modifier.pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown()
+                            val revealed = withTimeoutOrNull(5_000L) {
+                                waitForUpOrCancellation()
+                                false // released before 5s
+                            } ?: true // 5s elapsed while still held
+                            if (revealed) vaultRevealed = true
+                        }
+                    },
                 )
                 androidx.compose.animation.AnimatedVisibility(
                     visible = vaultRevealed,

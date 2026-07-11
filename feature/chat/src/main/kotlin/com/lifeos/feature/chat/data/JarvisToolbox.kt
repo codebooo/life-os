@@ -48,11 +48,13 @@ class JarvisToolbox @Inject constructor(
     /** The tool contract the model sees. Kept terse — every char costs latency. */
     val toolSpec: String =
         """
-        To act, emit commands on their own lines, exactly:
+        To CHANGE things, emit commands on their own line, exactly:
         [[add_task: title]] [[done_task: id]] [[delete_task: id]]
         [[timer: 5m]] [[remind: 18:00 | title]] [[remind: +25m | title]] [[cancel_reminder: id]]
-        [[event: tomorrow 15:00 | title]] [[note: title | body]] [[search: words]]
-        Use ids from LIVE DATA. Only claim an action you emitted. If no tool fits, just answer.
+        [[event: tomorrow 15:00 | title]] [[note: title | body]]
+        Rules: To ANSWER a question, read LIVE DATA below and reply in plain words NOW — do not
+        say you will look, search, or check; the data is already in front of you. Emit a command
+        ONLY to change something. Use ids from LIVE DATA. Never claim an action you didn't emit.
         """.trimIndent()
 
     /** Live cross-module state, compact, with stable ids the model can act on. */
@@ -81,9 +83,27 @@ class JarvisToolbox @Inject constructor(
                 "Calendar: " + events.take(5).joinToString("; ") { "${it.title.take(30)} ${AT.format(Date(it.startsAt))}" },
         )
 
+        // Note titles AND short body snippets so questions ("what's my cat's
+        // name?") are answerable straight from the data — no search round-trip.
         val notes = noteDao.observeAll().first()
         if (notes.isNotEmpty()) {
-            appendLine("Notes: " + notes.take(8).joinToString("; ") { it.title.take(30) })
+            appendLine("Notes:")
+            withContext(Dispatchers.IO) {
+                notes.take(8).forEach { note ->
+                    if (note.bodyVaultRef != null) {
+                        appendLine("- ${note.title.take(40)} (locked)")
+                    } else {
+                        val body = runCatching { File(note.path).takeIf { it.exists() }?.readText() }
+                            .getOrNull().orEmpty().replace('\n', ' ').trim().take(160)
+                        appendLine("- ${note.title.take(40)}: $body")
+                    }
+                }
+            }
+        }
+
+        val captures = captureDao.observeRecent().first().filter { !it.text.isNullOrBlank() }
+        if (captures.isNotEmpty()) {
+            appendLine("Captures: " + captures.take(6).joinToString("; ") { it.text!!.replace('\n', ' ').take(80) })
         }
 
         val packages = packageDao.activePackages()
@@ -105,23 +125,33 @@ class JarvisToolbox @Inject constructor(
         if (books.isNotEmpty()) {
             appendLine("Books: ${books.size} shelved, ${books.count { it.status == "READING" }} reading")
         }
-    }.trim().take(900)
+    }.trim().take(1400)
 
     /**
      * Finds `[[tool: args]]` tags in the model's reply, executes each, and
      * returns the cleaned text plus one confirmation line per executed tool —
      * the confirmations come from the app, never from the model.
      */
-    suspend fun runActions(modelText: String): String {
+    suspend fun runActions(modelText: String, debug: JarvisDebug? = null): String {
         val results = mutableListOf<String>()
         TOOL_TAG.findAll(modelText).forEach { match ->
             val tool = match.groupValues[1].trim().lowercase()
             val args = match.groupValues[2].trim()
             runCatching { execute(tool, args) }
-                .onSuccess { it?.let(results::add) }
-                .onFailure { results += "✗ ${tool.replace('_', ' ')} failed: ${it.message}" }
+                .onSuccess { it?.let { r -> results.add(r); debug?.add("tool", "$tool($args) -> $r") } }
+                .onFailure {
+                    results += "- ${tool.replace('_', ' ')} failed: ${it.message}"
+                    debug?.add("tool-error", "$tool($args): ${it.message}")
+                }
         }
-        val cleaned = modelText.replace(TOOL_TAG, "").replace(Regex("\\n{3,}"), "\n\n").trim()
+        var cleaned = modelText.replace(TOOL_TAG, "")
+        // Small models sometimes narrate intent ("I'll search the notes for…")
+        // instead of answering. Drop those stray meta-lines so the reply reads clean.
+        cleaned = cleaned.lineSequence()
+            .filterNot { NARRATION.containsMatchIn(it) }
+            .joinToString("\n")
+            .replace(Regex("\\n{3,}"), "\n\n")
+            .trim()
         return when {
             results.isEmpty() -> cleaned
             cleaned.isBlank() -> results.joinToString("\n")
@@ -134,42 +164,42 @@ class JarvisToolbox @Inject constructor(
             val title = args.trim().trim('"').take(80)
             if (title.isBlank()) null else {
                 dispatcher.dispatch(LifeAction.CreateTask(title, SOURCE))
-                "✓ Added task: $title"
+                "Added task: $title"
             }
         }
         "done_task" -> withTask(args) { id, title ->
-            captureDao.setTaskDone(id, true); "✓ Checked off: $title"
+            captureDao.setTaskDone(id, true); "Checked off: $title"
         }
         "delete_task" -> withTask(args) { id, title ->
-            todoDao.deleteWithChildren(id); "✓ Deleted task: $title"
+            todoDao.deleteWithChildren(id); "Deleted task: $title"
         }
         "timer" -> {
             val ms = parseDuration(args) ?: error("bad duration \"$args\"")
             dispatcher.dispatch(LifeAction.CreateReminder("Timer", System.currentTimeMillis() + ms, SOURCE))
-            "✓ Timer set — rings in ${human(ms)}"
+            "Timer set — rings in ${human(ms)}"
         }
         "remind" -> {
             val (whenPart, title) = splitArgs(args)
             val at = parseWhen(whenPart) ?: error("bad time \"$whenPart\"")
             dispatcher.dispatch(LifeAction.CreateReminder(title.ifBlank { "Reminder" }, at, SOURCE))
-            "✓ Reminder ${AT.format(Date(at))}: ${title.ifBlank { "Reminder" }}"
+            "Reminder ${AT.format(Date(at))}: ${title.ifBlank { "Reminder" }}"
         }
         "cancel_reminder" -> {
             val id = args.trim().toLongOrNull() ?: error("bad id")
             val r = reminderDao.getById(id) ?: error("no reminder $id")
             reminderDao.setEnabled(id, false)
-            "✓ Cancelled reminder: ${r.title}"
+            "Cancelled reminder: ${r.title}"
         }
         "event" -> {
             val (whenPart, title) = splitArgs(args)
             val at = parseWhen(whenPart) ?: error("bad time \"$whenPart\"")
             dispatcher.dispatch(LifeAction.CreateCalendarEvent(title.ifBlank { "Event" }, at, at + 3_600_000L, SOURCE))
-            "✓ Event ${AT.format(Date(at))}: $title"
+            "Event ${AT.format(Date(at))}: $title"
         }
         "note" -> {
             val (title, body) = splitArgs(args)
             dispatcher.dispatch(LifeAction.CreateNote(title.take(48), body.ifBlank { title }, SOURCE))
-            "✓ Note saved: ${title.take(48)}"
+            "Note saved: ${title.take(48)}"
         }
         "search" -> search(args)
         else -> null
@@ -198,19 +228,19 @@ class JarvisToolbox @Inject constructor(
                 if (note.bodyVaultRef != null) return@forEach
                 val body = runCatching { File(note.path).takeIf { it.exists() }?.readText() }.getOrNull().orEmpty()
                 val line = body.lineSequence().firstOrNull(::hit)
-                if (line != null) hits += "📝 ${note.title}: ${line.trim().take(140)}"
-                else if (hit(note.title)) hits += "📝 ${note.title}"
+                if (line != null) hits += "Note ${note.title}: ${line.trim().take(140)}"
+                else if (hit(note.title)) hits += "Note ${note.title}"
             }
         }
-        memexDao.observeAll().first().forEach { if (hit(it.body) || hit(it.title)) hits += "🗄 ${it.title}: ${it.body.trim().take(140)}" }
-        captureDao.observeRecent().first().forEach { if (hit(it.text)) hits += "⚡ ${it.text!!.trim().take(140)}" }
-        captureDao.observeTasks().first().forEach { if (hit(it.title)) hits += "☑ ${it.title}" }
-        bookDao.observeAll().first().forEach { if (hit(it.title) || hit(it.author)) hits += "📚 ${it.title} — ${it.author}" }
+        memexDao.observeAll().first().forEach { if (hit(it.body) || hit(it.title)) hits += "Memex ${it.title}: ${it.body.trim().take(140)}" }
+        captureDao.observeRecent().first().forEach { if (hit(it.text)) hits += "Capture ${it.text!!.trim().take(140)}" }
+        captureDao.observeTasks().first().forEach { if (hit(it.title)) hits += "Task ${it.title}" }
+        bookDao.observeAll().first().forEach { if (hit(it.title) || hit(it.author)) hits += "Book ${it.title} — ${it.author}" }
 
         return if (hits.isEmpty()) {
-            "✗ Searched notes, memex, captures, tasks and books — no match for \"$query\"."
+            "Searched notes, memex, captures, tasks and books — no match for \"$query\"."
         } else {
-            "🔍 Found:\n" + hits.take(5).joinToString("\n")
+            "Found:\n" + hits.take(5).joinToString("\n")
         }
     }
 
@@ -264,6 +294,9 @@ class JarvisToolbox @Inject constructor(
     private companion object {
         val SOURCE = SourceRef(LifeModule.CHAT, "jarvis")
         val TOOL_TAG = Regex("\\[\\[\\s*([a-z_]+)\\s*:\\s*([^\\]]*?)\\s*]]", RegexOption.IGNORE_CASE)
+        val NARRATION = Regex(
+            "(?i)^\\s*(i('| a)?ll?|i will|let me|i'm going to|i am going to)\\s+(search|look|check|find|scan)\\b",
+        )
         val AT = SimpleDateFormat("EEE HH:mm", Locale.getDefault())
         val STAMP = SimpleDateFormat("EEE d MMM HH:mm", Locale.getDefault())
         val SEARCH_STOP = setOf("the", "and", "for", "with", "search", "find", "look", "please")

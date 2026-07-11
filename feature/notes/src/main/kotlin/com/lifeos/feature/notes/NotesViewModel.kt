@@ -22,7 +22,10 @@ data class EditorState(
     val title: String = "",
     val body: String = "",
     val sensitive: Boolean = false,
-    val preview: Boolean = false,
+    /** In view mode: true = rendered Markdown, false = raw file content. */
+    val preview: Boolean = true,
+    /** true = edit mode (formatting toolbar + editable text). */
+    val editing: Boolean = false,
     val backlinks: List<NoteEntity> = emptyList(),
 )
 
@@ -51,6 +54,7 @@ sealed interface NotesUiEvent {
     data class BodyChanged(val value: String) : NotesUiEvent
     data object ToggleSensitive : NotesUiEvent
     data object TogglePreview : NotesUiEvent
+    data object EnterEdit : NotesUiEvent
     data object SaveNote : NotesUiEvent
     data object BackToList : NotesUiEvent
     data object OpenAsk : NotesUiEvent
@@ -84,7 +88,7 @@ class NotesViewModel @Inject constructor(
                 updateState { it.copy(query = event.value) }
             }
             NotesUiEvent.NewNote ->
-                updateState { it.copy(mode = NotesScreenMode.EDITOR, editor = EditorState()) }
+                updateState { it.copy(mode = NotesScreenMode.EDITOR, editor = EditorState(editing = true, preview = false)) }
             is NotesUiEvent.OpenNote -> openNote(event.id)
             is NotesUiEvent.DeleteNote -> viewModelScope.launch { notesRepository.delete(event.id) }
             is NotesUiEvent.TitleChanged ->
@@ -95,6 +99,8 @@ class NotesViewModel @Inject constructor(
                 updateState { it.copy(editor = it.editor.copy(sensitive = !it.editor.sensitive)) }
             NotesUiEvent.TogglePreview ->
                 updateState { it.copy(editor = it.editor.copy(preview = !it.editor.preview)) }
+            NotesUiEvent.EnterEdit ->
+                updateState { it.copy(editor = it.editor.copy(editing = true, preview = false)) }
             NotesUiEvent.SaveNote -> saveNote()
             NotesUiEvent.BackToList -> updateState { it.copy(mode = NotesScreenMode.LIST) }
             NotesUiEvent.OpenAsk -> updateState { it.copy(mode = NotesScreenMode.ASK) }

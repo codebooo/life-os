@@ -9,8 +9,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -127,6 +130,9 @@ internal fun ChatScreen(
                     MessageList(messages = uiState.messages, streaming = uiState.streaming)
                 }
             }
+            if (uiState.debugEnabled) {
+                JarvisDebugPanel(uiState.debugLog)
+            }
             AiInputBar(
                 value = uiState.input,
                 onValueChange = { onEvent(ChatUiEvent.InputChanged(it)) },
@@ -175,6 +181,61 @@ internal fun ChatScreen(
 
     if (uiState.showContext) {
         ContextSheet(uiState, onEvent)
+    }
+}
+
+/**
+ * Developer Options "Jarvis Debugging" panel: the last turn's snapshot, raw
+ * model output, tool calls and errors, with a one-tap copy for bug reports.
+ */
+@Composable
+private fun JarvisDebugPanel(log: List<String>) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var expanded by remember { mutableStateOf(false) }
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    modifier = Modifier.clickable { expanded = !expanded },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        if (expanded) Icons.Filled.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                    )
+                    Text("Jarvis debug (${log.size})", style = MaterialTheme.typography.labelLarge)
+                }
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+                        clipboard.setPrimaryClip(
+                            android.content.ClipData.newPlainText("jarvis-debug", log.joinToString("\n")),
+                        )
+                    },
+                ) { Text("Copy debug data") }
+            }
+            if (expanded) {
+                Text(
+                    log.joinToString("\n").ifBlank { "No debug data yet — send a message." },
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 220.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(top = 8.dp),
+                )
+            }
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 package com.lifeos.feature.notes
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,7 +16,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Preview
@@ -40,8 +43,13 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -158,10 +166,14 @@ private fun NoteEditorScreen(
     onEvent: (NotesUiEvent) -> Unit,
     snackbarHostState: SnackbarHostState,
 ) {
+    // Local selection-aware value so the toolbar can wrap the selected text.
+    var body by remember(editor.noteId, editor.editing) {
+        mutableStateOf(TextFieldValue(editor.body))
+    }
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (editor.noteId == null) "New note" else "Edit note") },
+                title = { Text(if (editor.noteId == null) "New note" else editor.title.ifBlank { "Note" }) },
                 navigationIcon = {
                     IconButton(onClick = { onEvent(NotesUiEvent.BackToList) }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -179,11 +191,21 @@ private fun NoteEditorScreen(
                             },
                         )
                     }
-                    IconButton(onClick = { onEvent(NotesUiEvent.TogglePreview) }) {
-                        Icon(Icons.Filled.Preview, contentDescription = "Preview")
-                    }
-                    IconButton(onClick = { onEvent(NotesUiEvent.SaveNote) }) {
-                        Icon(Icons.Filled.Save, contentDescription = "Save")
+                    if (editor.editing) {
+                        IconButton(onClick = { onEvent(NotesUiEvent.SaveNote) }) {
+                            Icon(Icons.Filled.Save, contentDescription = "Save")
+                        }
+                    } else {
+                        // View mode: toggle rendered <-> raw, and a pen to edit.
+                        IconButton(onClick = { onEvent(NotesUiEvent.TogglePreview) }) {
+                            Icon(
+                                if (editor.preview) Icons.Filled.Code else Icons.Filled.Preview,
+                                contentDescription = if (editor.preview) "Show raw" else "Show rendered",
+                            )
+                        }
+                        IconButton(onClick = { onEvent(NotesUiEvent.EnterEdit) }) {
+                            Icon(Icons.Filled.Edit, contentDescription = "Edit")
+                        }
                     }
                 },
             )
@@ -198,30 +220,50 @@ private fun NoteEditorScreen(
                 .imePadding(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            OutlinedTextField(
-                value = editor.title,
-                onValueChange = { onEvent(NotesUiEvent.TitleChanged(it)) },
-                placeholder = { Text("Title") },
-                singleLine = true,
-                textStyle = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            if (editor.preview) {
+            if (editor.editing) {
+                OutlinedTextField(
+                    value = editor.title,
+                    onValueChange = { onEvent(NotesUiEvent.TitleChanged(it)) },
+                    placeholder = { Text("Title") },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                MarkdownToolbar(
+                    onApply = { transform ->
+                        val next = transform(body)
+                        body = next
+                        onEvent(NotesUiEvent.BodyChanged(next.text))
+                    },
+                )
+                OutlinedTextField(
+                    value = body,
+                    onValueChange = {
+                        body = it
+                        onEvent(NotesUiEvent.BodyChanged(it.text))
+                    },
+                    placeholder = { Text("Write in Markdown — [[wiki links]] connect notes") },
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                )
+            } else if (editor.preview) {
                 Markdown(
-                    content = editor.body,
+                    content = editor.body.ifBlank { "_Empty note_" },
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
                 )
             } else {
-                OutlinedTextField(
-                    value = editor.body,
-                    onValueChange = { onEvent(NotesUiEvent.BodyChanged(it)) },
-                    placeholder = { Text("Write in Markdown — [[wiki links]] connect notes") },
+                Text(
+                    editor.body.ifBlank { "Empty note" },
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth(),
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState()),
                 )
             }
             if (editor.backlinks.isNotEmpty()) {
@@ -237,6 +279,67 @@ private fun NoteEditorScreen(
             }
         }
     }
+}
+
+/**
+ * Word-processor-style formatting bar (§Module 21): each button wraps the
+ * current selection (or inserts a marker at the caret) with the Markdown for
+ * that style — bold, italic, strikethrough, headings, list, quote, code, link.
+ */
+@Composable
+private fun MarkdownToolbar(onApply: ((TextFieldValue) -> TextFieldValue) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        ToolbarButton("B") { onApply { wrapSelection(it, "**") } }
+        ToolbarButton("I") { onApply { wrapSelection(it, "*") } }
+        ToolbarButton("S") { onApply { wrapSelection(it, "~~") } }
+        ToolbarButton("H1") { onApply { linePrefix(it, "# ") } }
+        ToolbarButton("H2") { onApply { linePrefix(it, "## ") } }
+        ToolbarButton("List") { onApply { linePrefix(it, "- ") } }
+        ToolbarButton("Quote") { onApply { linePrefix(it, "> ") } }
+        ToolbarButton("Code") { onApply { wrapSelection(it, "`") } }
+        ToolbarButton("Link") { onApply { linkSelection(it) } }
+    }
+}
+
+@Composable
+private fun ToolbarButton(label: String, onClick: () -> Unit) {
+    androidx.compose.material3.TextButton(onClick = onClick, contentPadding = PaddingValues(horizontal = 10.dp)) {
+        Text(label)
+    }
+}
+
+/** Wraps the selected range with [marker] on both sides (or inserts a pair). */
+private fun wrapSelection(value: TextFieldValue, marker: String): TextFieldValue {
+    val start = value.selection.min
+    val end = value.selection.max
+    val selected = value.text.substring(start, end)
+    val newText = value.text.substring(0, start) + marker + selected + marker + value.text.substring(end)
+    val caret = if (selected.isEmpty()) start + marker.length else end + marker.length * 2
+    return value.copy(text = newText, selection = TextRange(caret))
+}
+
+/** Prepends [prefix] to the start of the line the caret sits on. */
+private fun linePrefix(value: TextFieldValue, prefix: String): TextFieldValue {
+    val caret = value.selection.min
+    val lineStart = value.text.lastIndexOf('\n', (caret - 1).coerceAtLeast(0)).let { if (it < 0) 0 else it + 1 }
+    val newText = value.text.substring(0, lineStart) + prefix + value.text.substring(lineStart)
+    return value.copy(text = newText, selection = TextRange(caret + prefix.length))
+}
+
+/** Wraps the selection as a Markdown link `[text](url)` with the caret in url. */
+private fun linkSelection(value: TextFieldValue): TextFieldValue {
+    val start = value.selection.min
+    val end = value.selection.max
+    val selected = value.text.substring(start, end).ifEmpty { "text" }
+    val inserted = "[$selected](url)"
+    val newText = value.text.substring(0, start) + inserted + value.text.substring(end)
+    val urlStart = start + inserted.length - 4
+    return value.copy(text = newText, selection = TextRange(urlStart, urlStart + 3))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

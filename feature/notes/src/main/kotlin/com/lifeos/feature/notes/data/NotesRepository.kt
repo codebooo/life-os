@@ -3,6 +3,7 @@ package com.lifeos.feature.notes.data
 import android.content.Context
 import com.lifeos.core.ai.rag.NotesRag
 import com.lifeos.core.common.coroutines.DispatcherProvider
+import com.lifeos.core.common.storage.LifeOsPublicMirror
 import com.lifeos.core.common.result.LifeError
 import com.lifeos.core.common.result.LifeResult
 import com.lifeos.core.common.result.getOrNull
@@ -49,6 +50,7 @@ internal class DefaultNotesRepository @Inject constructor(
     private val vaultRepository: VaultRepository,
     private val notesRag: NotesRag,
     private val eventBus: LifeEventBus,
+    private val publicMirror: LifeOsPublicMirror,
     private val dispatchers: DispatcherProvider,
 ) : NotesRepository {
 
@@ -123,6 +125,10 @@ internal class DefaultNotesRepository @Inject constructor(
 
             reindexLinks(id, body)
             reindexEmbeddings(id, title, body, sensitive)
+            // Mirror non-sensitive notes into the readable /LifeOS/Notes folder
+            // (no-op unless All-files access is granted). Sensitive notes never leave the vault.
+            // Filename tracks the note's own file so edits overwrite in place.
+            if (!sensitive) publicMirror.writeText("Notes", File(path).name, body)
             eventBus.tryPublish(LifeEvent.NoteSaved(noteId = id, title = title))
             id
         }
@@ -130,7 +136,10 @@ internal class DefaultNotesRepository @Inject constructor(
 
     override suspend fun delete(noteId: Long) = withContext(dispatchers.io) {
         noteDao.getById(noteId)?.let { note ->
-            if (note.bodyVaultRef == null) File(note.path).delete()
+            if (note.bodyVaultRef == null) {
+                File(note.path).delete()
+                publicMirror.delete("Notes", File(note.path).name)
+            }
             note.bodyVaultRef?.let { vaultRepository.deleteBlob(VaultRef(it)) }
             noteDao.delete(noteId)
         } ?: Unit

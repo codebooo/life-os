@@ -48,4 +48,14 @@ interface SettingsRepository {
     val homeOrder: Flow<List<String>>
 
     suspend fun setHomeOrder(labels: List<String>)
+
+    /** Developer option: surface Jarvis debug data (raw output, tool calls, errors). */
+    val jarvisDebug: Flow<Boolean>
+
+    suspend fun setJarvisDebug(enabled: Boolean)
+
+    /** Mirror module data to a readable /LifeOS folder on shared storage. */
+    val publicFolderMirror: Flow<Boolean>
+
+    suspend fun setPublicFolderMirror(enabled: Boolean)
 }

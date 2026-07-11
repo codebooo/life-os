@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -152,36 +153,57 @@ private fun FilesTab(uiState: NasUiState, onEvent: (NasUiEvent) -> Unit) {
 
 @Composable
 private fun ServerAppsTab(uiState: NasUiState, onEvent: (NasUiEvent) -> Unit) {
+    // App-store-style rows (Aurora-search look): square app glyph, name +
+    // subtitle stacked, and a status/Check action button on the right.
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp),
     ) {
         items(uiState.serverApps, key = { it.name }) { app ->
-            Card(modifier = Modifier.padding(horizontal = 12.dp)) {
-                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(app.name, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                        AssistChip(
-                            onClick = { onEvent(NasUiEvent.CheckHealth) },
-                            label = {
-                                Text(
-                                    when (app.healthy) {
-                                        true -> "Running"
-                                        false -> "Unreachable"
-                                        null -> "Check"
-                                    },
-                                )
-                            },
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Surface(
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier.size(52.dp),
+                ) {
+                    androidx.compose.foundation.layout.Box(contentAlignment = androidx.compose.ui.Alignment.Center) {
+                        Text(
+                            app.name.take(1).uppercase(),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
                     }
-                    Text(app.purpose, style = MaterialTheme.typography.bodyMedium)
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(app.name, style = MaterialTheme.typography.titleMedium, maxLines = 1)
                     Text(
-                        app.setup,
+                        app.purpose,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
                     )
                 }
+                val (label, container) = when (app.healthy) {
+                    true -> "Running" to MaterialTheme.colorScheme.primary
+                    false -> "Retry" to MaterialTheme.colorScheme.error
+                    null -> "Check" to MaterialTheme.colorScheme.secondaryContainer
+                }
+                androidx.compose.material3.Button(
+                    onClick = { onEvent(NasUiEvent.CheckHealth) },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = container),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                ) { Text(label) }
             }
+            androidx.compose.material3.HorizontalDivider(
+                modifier = Modifier.padding(start = 82.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+            )
         }
     }
 }

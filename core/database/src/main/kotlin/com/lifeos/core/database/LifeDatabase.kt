@@ -53,6 +53,9 @@ import com.lifeos.core.database.downloads.DownloadDao
 import com.lifeos.core.database.downloads.DownloadEntity
 import com.lifeos.core.database.plants.MyPlantEntity
 import com.lifeos.core.database.plants.PlantDao
+import com.lifeos.core.database.screentime.AppUsageEntity
+import com.lifeos.core.database.screentime.ScreenTimeDao
+import com.lifeos.core.database.screentime.ScreenTimeDayEntity
 
 /**
  * The single app database (§1.7), feature-partitioned by package with
@@ -90,8 +93,10 @@ import com.lifeos.core.database.plants.PlantDao
         InteractionLogEntity::class,
         DownloadEntity::class,
         MyPlantEntity::class,
+        ScreenTimeDayEntity::class,
+        AppUsageEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -105,6 +110,7 @@ import com.lifeos.core.database.plants.PlantDao
         AutoMigration(from = 9, to = 10),
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
+        AutoMigration(from = 12, to = 13),
     ],
 )
 abstract class LifeDatabase : RoomDatabase() {
@@ -128,6 +134,7 @@ abstract class LifeDatabase : RoomDatabase() {
     abstract fun evolutionDao(): EvolutionDao
     abstract fun downloadDao(): DownloadDao
     abstract fun plantDao(): PlantDao
+    abstract fun screenTimeDao(): ScreenTimeDao
 
     companion object {
         const val NAME = "life-os.db"

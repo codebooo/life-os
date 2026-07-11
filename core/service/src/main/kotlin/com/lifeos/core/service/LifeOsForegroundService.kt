@@ -59,10 +59,11 @@ class LifeOsForegroundService : LifecycleService() {
 
     private fun buildNotification(): Notification =
         NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("LifeOS is coordinating")
-            .setContentText("Event bus and automation rules are active")
+            .setContentTitle("LifeOS")
             .setSmallIcon(android.R.drawable.ic_popup_sync)
             .setOngoing(true)
+            .setShowWhen(false)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_DEFERRED)
             .setContentIntent(launchAppIntent())
             .build()
@@ -78,20 +79,27 @@ class LifeOsForegroundService : LifecycleService() {
     }
 
     private fun createNotificationChannel() {
+        val manager = getSystemService(NotificationManager::class.java)
+        // Channel importance is immutable once created; the old channel was stuck
+        // showing a full notification. Delete it and use a fresh MIN-importance
+        // id so the coordination notice hides (no status-bar icon, collapsed).
+        manager.deleteNotificationChannel(LEGACY_CHANNEL_ID)
         val channel = NotificationChannel(
             CHANNEL_ID,
             "Background coordination",
             NotificationManager.IMPORTANCE_MIN,
         ).apply {
-            description = "Keeps cross-module automation running"
+            description = "Keeps cross-module automation running. Android requires a " +
+                "persistent notice for always-on background work; this is the quietest it allows."
             setShowBadge(false)
         }
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        manager.createNotificationChannel(channel)
     }
 
     companion object {
         private const val TAG = "ForegroundService"
-        private const val CHANNEL_ID = "lifeos_coordination"
+        private const val LEGACY_CHANNEL_ID = "lifeos_coordination"
+        private const val CHANNEL_ID = "lifeos_coordination_v2"
         private const val NOTIFICATION_ID = 1
 
         fun start(context: Context) {

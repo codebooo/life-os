@@ -8,6 +8,9 @@
         <service
             android:name="com.lifeos.feature.adhd.overlay.OverwhelmOverlayService"
             android:exported="false" />
+        <service
+            android:name="com.lifeos.feature.adhd.overlay.TimerOverlayService"
+            android:exported="false" />
     </application>
 
 </manifest>

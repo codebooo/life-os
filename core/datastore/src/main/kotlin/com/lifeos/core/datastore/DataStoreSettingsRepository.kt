@@ -90,6 +90,20 @@ internal class DataStoreSettingsRepository @Inject constructor(
         dataStore.edit { prefs -> prefs[KEY_HOME_ORDER] = labels.joinToString("|") }
     }
 
+    override val jarvisDebug: Flow<Boolean> =
+        dataStore.data.map { prefs -> prefs[KEY_JARVIS_DEBUG] ?: false }
+
+    override suspend fun setJarvisDebug(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[KEY_JARVIS_DEBUG] = enabled }
+    }
+
+    override val publicFolderMirror: Flow<Boolean> =
+        dataStore.data.map { prefs -> prefs[KEY_PUBLIC_FOLDER_MIRROR] ?: false }
+
+    override suspend fun setPublicFolderMirror(enabled: Boolean) {
+        dataStore.edit { prefs -> prefs[KEY_PUBLIC_FOLDER_MIRROR] = enabled }
+    }
+
     private companion object {
         val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val KEY_THEME_PALETTE = stringPreferencesKey("theme_palette")
@@ -100,5 +114,7 @@ internal class DataStoreSettingsRepository @Inject constructor(
         val KEY_PLANNER_DISMISSED = stringPreferencesKey("planner_dismissed")
         val KEY_PROTON_ICS_URL = stringPreferencesKey("proton_ics_url")
         val KEY_HOME_ORDER = stringPreferencesKey("home_order")
+        val KEY_JARVIS_DEBUG = booleanPreferencesKey("jarvis_debug")
+        val KEY_PUBLIC_FOLDER_MIRROR = booleanPreferencesKey("public_folder_mirror")
     }
 }

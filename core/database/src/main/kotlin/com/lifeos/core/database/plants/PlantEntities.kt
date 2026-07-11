@@ -24,6 +24,10 @@ data class MyPlantEntity(
     /** Reminder row backing the watering notification, if created. */
     val reminderId: Long?,
     val createdAt: Long,
+    /** Absolute path to a user-taken photo (copied into app storage). */
+    val photoPath: String? = null,
+    /** Free-text personal notes for this plant. */
+    val notes: String? = null,
 )
 
 @Dao
@@ -31,6 +35,9 @@ interface PlantDao {
 
     @Insert
     suspend fun insert(plant: MyPlantEntity): Long
+
+    @androidx.room.Update
+    suspend fun update(plant: MyPlantEntity)
 
     @Query("SELECT * FROM my_plants ORDER BY name")
     fun observeAll(): Flow<List<MyPlantEntity>>

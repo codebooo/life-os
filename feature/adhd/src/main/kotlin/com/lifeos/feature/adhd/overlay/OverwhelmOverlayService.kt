@@ -57,24 +57,47 @@ class OverwhelmOverlayService : Service() {
         val density = resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
 
+        val ctx = this
+        fun pillButton(label: String, filled: Boolean, onClick: () -> Unit) = Button(ctx).apply {
+            text = label
+            isAllCaps = false
+            textSize = 15f
+            setTextColor(if (filled) SURFACE else PRIMARY)
+            stateListAnimator = null
+            background = GradientDrawable().apply {
+                cornerRadius = dp(24).toFloat()
+                if (filled) setColor(PRIMARY) else {
+                    setColor(Color.TRANSPARENT)
+                    setStroke(dp(1), OUTLINE)
+                }
+            }
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { rightMargin = dp(10) }
+            layoutParams = lp
+            setOnClickListener { onClick() }
+        }
+
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(20), dp(24), dp(20))
             background = GradientDrawable().apply {
-                cornerRadius = dp(24).toFloat()
-                setColor(Color.parseColor("#1E2A38"))
+                cornerRadius = dp(28).toFloat()
+                setColor(SURFACE)
+                setStroke(dp(1), OUTLINE)
             }
             addView(
                 TextView(context).apply {
                     text = "What's next?"
-                    setTextColor(Color.parseColor("#90CAF9"))
+                    setTextColor(PRIMARY)
                     textSize = 13f
                 },
             )
             addView(
                 TextView(context).apply {
                     text = title
-                    setTextColor(Color.WHITE)
+                    setTextColor(ON_SURFACE)
                     textSize = 20f
                     setTypeface(typeface, Typeface.BOLD)
                     setPadding(0, dp(6), 0, dp(14))
@@ -85,24 +108,16 @@ class OverwhelmOverlayService : Service() {
                     orientation = LinearLayout.HORIZONTAL
                     if (taskId != null) {
                         addView(
-                            Button(context).apply {
-                                text = "Done"
-                                setOnClickListener {
-                                    scope.launch {
-                                        withContext(Dispatchers.IO) { todoDao.setDone(taskId, true) }
-                                        val next = withContext(Dispatchers.IO) { todoDao.nextOpenTask() }
-                                        showOverlay(next?.title ?: "All clear. Breathe.", next?.id)
-                                    }
+                            pillButton("Done", filled = true) {
+                                scope.launch {
+                                    withContext(Dispatchers.IO) { todoDao.setDone(taskId, true) }
+                                    val next = withContext(Dispatchers.IO) { todoDao.nextOpenTask() }
+                                    showOverlay(next?.title ?: "All clear. Breathe.", next?.id)
                                 }
                             },
                         )
                     }
-                    addView(
-                        Button(context).apply {
-                            text = "Close"
-                            setOnClickListener { stopSelf() }
-                        },
-                    )
+                    addView(pillButton("Close", filled = false) { stopSelf() })
                 },
             )
         }
@@ -136,6 +151,13 @@ class OverwhelmOverlayService : Service() {
 
     companion object {
         const val ACTION_HIDE = "com.lifeos.adhd.HIDE_OVERLAY"
+
+        // Match the app's dark M3 pastel theme (core:designsystem) so the overlay
+        // reads as part of LifeOS, not a stray blue card.
+        private val SURFACE = Color.parseColor("#14181C")
+        private val ON_SURFACE = Color.parseColor("#E2E3DE")
+        private val OUTLINE = Color.parseColor("#3A4048")
+        private val PRIMARY = Color.parseColor("#9FCBA6")
 
         fun show(context: Context) {
             context.startService(Intent(context, OverwhelmOverlayService::class.java))

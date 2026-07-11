@@ -22,6 +22,7 @@ data class SettingsUiState(
     val navBarItems: List<String> = emptyList(),
     /** Home tile arrangement, in display order. */
     val homeOrder: List<String> = emptyList(),
+    val jarvisDebug: Boolean = false,
     val versionName: String = BuildConfig.VERSION_NAME,
     val message: String? = null,
 )
@@ -38,6 +39,7 @@ sealed interface SettingsUiEvent {
     data class MoveNavItem(val id: String, val delta: Int) : SettingsUiEvent
     /** Moves a Home tile up (-1) or down (+1) in the arrangement. */
     data class MoveHomeItem(val label: String, val delta: Int) : SettingsUiEvent
+    data object ToggleJarvisDebug : SettingsUiEvent
     data object Save : SettingsUiEvent
     data object DismissMessage : SettingsUiEvent
 }
@@ -60,6 +62,7 @@ class SettingsViewModel @Inject constructor(
             val navItems = settingsRepository.navBarItems.first()
                 .ifEmpty { listOf("CALENDAR", "TASKS", "INBOX", "ASSISTANT") }
             val homeOrder = settingsRepository.homeOrder.first().ifEmpty { DEFAULT_HOME_ORDER }
+            val jarvisDebug = settingsRepository.jarvisDebug.first()
             updateState {
                 it.copy(
                     ollamaBaseUrl = ai.ollamaBaseUrl,
@@ -70,6 +73,7 @@ class SettingsViewModel @Inject constructor(
                     themePalette = palette,
                     navBarItems = navItems,
                     homeOrder = homeOrder,
+                    jarvisDebug = jarvisDebug,
                 )
             }
         }
@@ -104,6 +108,11 @@ class SettingsViewModel @Inject constructor(
                 updateState { it.copy(homeOrder = next) }
                 viewModelScope.launch { settingsRepository.setHomeOrder(next) }
             }
+            SettingsUiEvent.ToggleJarvisDebug -> {
+                val next = !uiState.value.jarvisDebug
+                updateState { it.copy(jarvisDebug = next) }
+                viewModelScope.launch { settingsRepository.setJarvisDebug(next) }
+            }
             SettingsUiEvent.Save -> viewModelScope.launch {
                 val state = uiState.value
                 aiConfigRepository.setOllamaBaseUrl(state.ollamaBaseUrl)
@@ -122,6 +131,7 @@ class SettingsViewModel @Inject constructor(
         val DEFAULT_HOME_ORDER = listOf(
             "Notes", "Logger", "Packages", "Finance", "Scan", "Planner", "Books",
             "Routes", "Smart home", "NAS", "Clock", "Focus", "Memex", "Macros", "Evolution",
+            "Downloader", "Plants", "News", "Screen Time",
         )
     }
 }
