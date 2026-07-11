@@ -6,12 +6,15 @@ import com.lifeos.core.common.result.LifeError
 import com.lifeos.core.common.viewmodel.LifeViewModel
 import com.lifeos.core.database.chat.AiConversationEntity
 import com.lifeos.core.database.chat.AiMessageEntity
+import com.lifeos.core.datastore.SettingsRepository
 import com.lifeos.feature.chat.data.ChatRepository
+import com.lifeos.feature.chat.data.JarvisDebug
 import com.lifeos.feature.chat.data.ReplyProgress
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
@@ -30,6 +33,9 @@ data class ChatUiState(
     /** Manual context (notes, pasted files) attached to every prompt. */
     val contextText: String = "",
     val showContext: Boolean = false,
+    /** Developer Options: show Jarvis internals + a copy-debug button. */
+    val debugEnabled: Boolean = false,
+    val debugLog: List<String> = emptyList(),
 )
 
 sealed interface ChatUiEvent {
@@ -53,6 +59,8 @@ sealed interface ChatUiEffect
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val chatRepository: ChatRepository,
+    private val settingsRepository: SettingsRepository,
+    private val jarvisDebug: JarvisDebug,
 ) : LifeViewModel<ChatUiState, ChatUiEvent, ChatUiEffect>(ChatUiState()) {
 
     private val activeConversationId = MutableStateFlow<Long?>(null)
@@ -63,6 +71,12 @@ class ChatViewModel @Inject constructor(
             chatRepository.observeConversations().collect { conversations ->
                 updateState { it.copy(conversations = conversations) }
             }
+        }
+        viewModelScope.launch {
+            settingsRepository.jarvisDebug.combine(jarvisDebug.log) { enabled, log -> enabled to log }
+                .collect { (enabled, log) ->
+                    updateState { it.copy(debugEnabled = enabled, debugLog = if (enabled) log else emptyList()) }
+                }
         }
         viewModelScope.launch {
             activeConversationId

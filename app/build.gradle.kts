@@ -10,8 +10,8 @@ android {
 
     defaultConfig {
         applicationId = "com.lifeos"
-        versionCode = 14
-        versionName = "0.1.0-alpha.14"
+        versionCode = 15
+        versionName = "0.1.0-alpha.15"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -85,6 +85,7 @@ dependencies {
     implementation(projects.feature.plants)
     implementation(projects.feature.news)
     implementation(projects.feature.vault)
+    implementation(projects.feature.screentime)
 
     implementation(projects.core.model)
     implementation(projects.core.network)

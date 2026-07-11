@@ -266,6 +266,37 @@ fun SettingsRoute(
                 }
             }
 
+            SectionHeader(title = "Storage")
+            SystemSettingRow(
+                title = "Readable /LifeOS folder",
+                subtitle = "Grant all-files access so notes appear as .md files under Internal storage/LifeOS/Notes",
+            ) {
+                if (android.os.Build.VERSION.SDK_INT >= 30) {
+                    context.startActivity(
+                        Intent(
+                            Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                            android.net.Uri.parse("package:${context.packageName}"),
+                        ),
+                    )
+                }
+            }
+
+            SectionHeader(title = "Developer Options")
+            Surface(modifier = Modifier.fillMaxWidth()) {
+                ListItem(
+                    headlineContent = { Text("Jarvis Debugging") },
+                    supportingContent = {
+                        Text("Show Jarvis's data snapshot, raw output, tool calls and errors in the chat, with a copy button")
+                    },
+                    trailingContent = {
+                        Switch(
+                            checked = uiState.jarvisDebug,
+                            onCheckedChange = { viewModel.onEvent(SettingsUiEvent.ToggleJarvisDebug) },
+                        )
+                    },
+                )
+            }
+
             SectionHeader(title = "About")
             Card(modifier = Modifier.padding(bottom = 24.dp)) {
                 Column(modifier = Modifier.padding(16.dp)) {

@@ -41,6 +41,7 @@ internal class DefaultChatRepository @Inject constructor(
     private val chatDao: ChatDao,
     private val aiRouter: AiRouter,
     private val toolbox: JarvisToolbox,
+    private val debug: JarvisDebug,
 ) : ChatRepository {
 
     override fun observeConversations(): Flow<List<AiConversationEntity>> =
@@ -100,9 +101,11 @@ internal class DefaultChatRepository @Inject constructor(
         // Small on-device models degrade with long transcripts, and Gemma's
         // maxTokens budget covers input AND output — an oversized prompt eats
         // the answer's budget and truncates it mid-sentence. Keep it tight.
+        debug.beginTurn(text)
         val trimmedHistory = history.takeLast(4).map { it.copy(content = it.content.take(400)) }
-        val system = SYSTEM_PROMPT + "\n\n" + toolbox.toolSpec + "\n\n" +
-            runCatching { toolbox.snapshot() }.getOrDefault("")
+        val snapshot = runCatching { toolbox.snapshot() }.getOrDefault("")
+        val system = SYSTEM_PROMPT + "\n\n" + toolbox.toolSpec + "\n\n" + snapshot
+        debug.add("snapshot", snapshot)
         val request = AiRequest(messages = trimmedHistory, system = system)
         aiRouter.stream(request).collect { event ->
             when (event) {
@@ -121,16 +124,18 @@ internal class DefaultChatRepository @Inject constructor(
                     emit(ReplyProgress.Delta(accumulated.toString()))
                 }
                 is AiRouter.StreamEvent.Failed -> {
+                    debug.add("error", event.error.message)
                     emit(ReplyProgress.Failed(event.error))
                 }
             }
         }
 
         if (accumulated.isNotEmpty()) {
+            debug.add("raw-output", accumulated.toString())
             // Execute any [[tool: args]] lines the model emitted; the final
-            // message is the cleaned reply + app-generated ✓ confirmations.
-            val acted = runCatching { toolbox.runActions(accumulated.toString()) }
-                .getOrDefault(accumulated.toString())
+            // message is the cleaned reply + app-generated confirmations.
+            val acted = runCatching { toolbox.runActions(accumulated.toString(), debug) }
+                .getOrElse { debug.add("error", it.message ?: "runActions failed"); accumulated.toString() }
             accumulated.setLength(0)
             accumulated.append(acted)
             persistAssistant()

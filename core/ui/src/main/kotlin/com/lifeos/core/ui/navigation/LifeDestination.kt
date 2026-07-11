@@ -85,6 +85,9 @@ sealed interface LifeDestination {
     /** Hidden: reachable only via the Home-title long-press reveal. */
     @Serializable
     data object Vault : LifeDestination
+
+    @Serializable
+    data object ScreenTime : LifeDestination
 }
 
 const val DEEP_LINK_SCHEME = "lifeos"

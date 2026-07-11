@@ -9,15 +9,10 @@ dependencies {
     implementation(projects.core.common)
     implementation(projects.core.designsystem)
     implementation(projects.core.database)
-    implementation(projects.core.model)
-    implementation(projects.core.vault)
     implementation(projects.core.ui)
 
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.androidx.compose.material.icons.extended)
-    implementation(libs.androidx.biometric)
-    implementation(libs.androidx.fragment.ktx)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.markdown.renderer.m3)
 }
