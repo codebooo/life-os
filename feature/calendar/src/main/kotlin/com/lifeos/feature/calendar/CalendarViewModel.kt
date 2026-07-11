@@ -21,13 +21,13 @@ enum class CalendarViewMode { MONTH, WEEK, DAY }
 
 data class CalendarUiState(
     val viewMode: CalendarViewMode = CalendarViewMode.MONTH,
-    /** First millisecond of the shown month. */
-    val monthStart: Long = 0L,
-    val monthEvents: List<CalendarEventEntity> = emptyList(),
-    /** Selected day (start-of-day millis) for the agenda below the grid. */
+    /** Anchor of the visible period: first ms of the month / week / day. */
+    val anchor: Long = 0L,
+    /** All events inside the loaded window (padded month grid or week). */
+    val events: List<CalendarEventEntity> = emptyList(),
+    /** Selected day (start-of-day millis) for the agenda + new events. */
     val selectedDay: Long = 0L,
     val showEditor: Boolean = false,
-    /** Non-null while editing an existing event. */
     val editingEventId: Long? = null,
     val editorTitle: String = "",
     val editorLocation: String = "",
@@ -45,9 +45,12 @@ data class CalendarUiState(
 
 sealed interface CalendarUiEvent {
     data class SetViewMode(val mode: CalendarViewMode) : CalendarUiEvent
-    data object PreviousMonth : CalendarUiEvent
-    data object NextMonth : CalendarUiEvent
+    data object Previous : CalendarUiEvent
+    data object Next : CalendarUiEvent
+    data object Today : CalendarUiEvent
     data class SelectDay(val dayStart: Long) : CalendarUiEvent
+    /** Opens the editor pre-filled for [dayStart] at [hour] (timeline tap / FAB). */
+    data class NewEventAt(val dayStart: Long, val hour: Int) : CalendarUiEvent
     data object ToggleEditor : CalendarUiEvent
     data class EditEvent(val event: CalendarEventEntity) : CalendarUiEvent
     data class EditorTitleChanged(val value: String) : CalendarUiEvent
@@ -69,7 +72,6 @@ sealed interface CalendarUiEvent {
 }
 
 sealed interface CalendarUiEffect {
-    /** Hand the exported ICS text to a share sheet. */
     data class ShareIcs(val ics: String) : CalendarUiEffect
 }
 
@@ -82,20 +84,19 @@ class CalendarViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
 ) : LifeViewModel<CalendarUiState, CalendarUiEvent, CalendarUiEffect>(
     CalendarUiState(
-        monthStart = startOfMonth(System.currentTimeMillis()),
+        anchor = startOfMonth(System.currentTimeMillis()),
         selectedDay = startOfDay(System.currentTimeMillis()),
     ),
 ) {
 
-    private val monthStart = MutableStateFlow(startOfMonth(System.currentTimeMillis()))
+    /** Loaded window follows mode + anchor; padded so month grids fill fully. */
+    private val window = MutableStateFlow(windowFor(CalendarViewMode.MONTH, startOfMonth(System.currentTimeMillis())))
 
     init {
         viewModelScope.launch {
-            monthStart
-                .flatMapLatest { start ->
-                    calendarRepository.observeWindow(start, endOfMonth(start))
-                }
-                .collect { events -> updateState { it.copy(monthEvents = events) } }
+            window
+                .flatMapLatest { (start, end) -> calendarRepository.observeWindow(start, end) }
+                .collect { events -> updateState { it.copy(events = events) } }
         }
         viewModelScope.launch {
             val url = settingsRepository.protonIcsUrl.first()
@@ -105,10 +106,35 @@ class CalendarViewModel @Inject constructor(
 
     override fun onEvent(event: CalendarUiEvent) {
         when (event) {
-            is CalendarUiEvent.SetViewMode -> updateState { it.copy(viewMode = event.mode) }
-            CalendarUiEvent.PreviousMonth -> shiftMonth(-1)
-            CalendarUiEvent.NextMonth -> shiftMonth(1)
+            is CalendarUiEvent.SetViewMode -> {
+                val anchor = anchorFor(event.mode, uiState.value.selectedDay)
+                updateState { it.copy(viewMode = event.mode, anchor = anchor) }
+                window.value = windowFor(event.mode, anchor)
+            }
+            CalendarUiEvent.Previous -> shift(-1)
+            CalendarUiEvent.Next -> shift(1)
+            CalendarUiEvent.Today -> {
+                val today = startOfDay(System.currentTimeMillis())
+                val anchor = anchorFor(uiState.value.viewMode, today)
+                updateState { it.copy(anchor = anchor, selectedDay = today) }
+                window.value = windowFor(uiState.value.viewMode, anchor)
+            }
             is CalendarUiEvent.SelectDay -> updateState { it.copy(selectedDay = event.dayStart) }
+            is CalendarUiEvent.NewEventAt -> updateState {
+                it.copy(
+                    selectedDay = event.dayStart,
+                    showEditor = true,
+                    editingEventId = null,
+                    editorTitle = "",
+                    editorLocation = "",
+                    editorNotes = "",
+                    editorHour = event.hour.toString(),
+                    editorMinute = "0",
+                    editorDurationMinutes = "60",
+                    editorAllDay = false,
+                    editorRemind = true,
+                )
+            }
             CalendarUiEvent.ToggleEditor -> updateState {
                 it.copy(
                     showEditor = !it.showEditor,
@@ -157,6 +183,7 @@ class CalendarViewModel @Inject constructor(
             CalendarUiEvent.Save -> save()
             is CalendarUiEvent.Delete -> viewModelScope.launch {
                 calendarRepository.delete(event.eventId)
+                updateState { it.copy(showEditor = false, editingEventId = null) }
             }
             CalendarUiEvent.MirrorToSystem -> viewModelScope.launch {
                 when (val result = systemCalendarMirror.mirrorAll()) {
@@ -188,13 +215,26 @@ class CalendarViewModel @Inject constructor(
         }
     }
 
-    private fun shiftMonth(by: Int) {
-        val calendar = Calendar.getInstance().apply {
-            timeInMillis = monthStart.value
-            add(Calendar.MONTH, by)
+    private fun shift(by: Int) {
+        val state = uiState.value
+        val calendar = Calendar.getInstance().apply { timeInMillis = state.anchor }
+        when (state.viewMode) {
+            CalendarViewMode.MONTH -> calendar.add(Calendar.MONTH, by)
+            CalendarViewMode.WEEK -> calendar.add(Calendar.WEEK_OF_YEAR, by)
+            CalendarViewMode.DAY -> calendar.add(Calendar.DAY_OF_YEAR, by)
         }
-        monthStart.value = calendar.timeInMillis
-        updateState { it.copy(monthStart = calendar.timeInMillis) }
+        val anchor = calendar.timeInMillis
+        updateState {
+            it.copy(
+                anchor = anchor,
+                // Keep the selection inside the visible period.
+                selectedDay = when (state.viewMode) {
+                    CalendarViewMode.DAY -> anchor
+                    else -> anchor
+                },
+            )
+        }
+        window.value = windowFor(state.viewMode, anchor)
     }
 
     private fun save() {
@@ -253,12 +293,29 @@ class CalendarViewModel @Inject constructor(
             set(Calendar.DAY_OF_MONTH, 1)
         }.timeInMillis
 
-        fun endOfMonth(monthStart: Long): Long = Calendar.getInstance().apply {
-            timeInMillis = monthStart
-            add(Calendar.MONTH, 1)
+        /** Monday-start week containing [at]. */
+        fun startOfWeek(at: Long): Long = Calendar.getInstance().apply {
+            timeInMillis = startOfDay(at)
+            firstDayOfWeek = Calendar.MONDAY
+            set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
         }.timeInMillis
+
+        fun anchorFor(mode: CalendarViewMode, day: Long): Long = when (mode) {
+            CalendarViewMode.MONTH -> startOfMonth(day)
+            CalendarViewMode.WEEK -> startOfWeek(day)
+            CalendarViewMode.DAY -> startOfDay(day)
+        }
+
+        /** Loaded range, padded so the 6x7 month grid's leading/trailing days have events too. */
+        fun windowFor(mode: CalendarViewMode, anchor: Long): Pair<Long, Long> = when (mode) {
+            CalendarViewMode.MONTH -> {
+                val gridStart = startOfWeek(anchor)
+                gridStart to gridStart + 42L * DAY_MS
+            }
+            CalendarViewMode.WEEK -> anchor to anchor + 7L * DAY_MS
+            CalendarViewMode.DAY -> anchor to anchor + DAY_MS
+        }
+
+        const val DAY_MS = 86_400_000L
     }
 }
-
-private fun startOfMonth(at: Long) = CalendarViewModel.startOfMonth(at)
-private fun startOfDay(at: Long) = CalendarViewModel.startOfDay(at)

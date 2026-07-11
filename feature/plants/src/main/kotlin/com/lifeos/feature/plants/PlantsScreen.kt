@@ -152,25 +152,26 @@ fun PlantsRoute(viewModel: PlantsViewModel = hiltViewModel()) {
                     LazyColumn {
                         listItems(myPlants, key = { it.id }) { plant ->
                             val species = PlantAtlas.byId(plant.speciesId)
-                            ListItem(
-                                modifier = Modifier.padding(0.dp),
-                                headlineContent = { Text(plant.name) },
-                                supportingContent = {
-                                    val last = plant.lastWateredAt?.let { "last ${com.lifeos.feature.plants.dayFormat(it)}" } ?: "not watered yet"
-                                    Text("${species?.name ?: plant.speciesId} · every ${plant.waterEveryDays}d · $last")
-                                },
-                                leadingContent = { PlantThumb(plant.photoPath, size = 48.dp) },
-                                trailingContent = {
-                                    IconButton(onClick = { viewModel.watered(plant) }) {
-                                        Icon(Icons.Filled.WaterDrop, contentDescription = "Watered", tint = MaterialTheme.colorScheme.primary)
-                                    }
-                                },
-                            )
+                            // Whole row opens the plant's detail screen; the drop
+                            // icon stays a separate one-tap "watered" action.
                             Surface(
                                 onClick = { openPlantId = plant.id },
-                                color = MaterialTheme.colorScheme.surface,
-                                modifier = Modifier.fillMaxWidth().height(1.dp),
-                            ) {}
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                ListItem(
+                                    headlineContent = { Text(plant.name) },
+                                    supportingContent = {
+                                        val last = plant.lastWateredAt?.let { "last ${com.lifeos.feature.plants.dayFormat(it)}" } ?: "not watered yet"
+                                        Text("${species?.name ?: plant.speciesId} · every ${plant.waterEveryDays}d · $last")
+                                    },
+                                    leadingContent = { PlantThumb(plant.photoPath, size = 48.dp) },
+                                    trailingContent = {
+                                        IconButton(onClick = { viewModel.watered(plant) }) {
+                                            Icon(Icons.Filled.WaterDrop, contentDescription = "Watered", tint = MaterialTheme.colorScheme.primary)
+                                        }
+                                    },
+                                )
+                            }
                         }
                     }
                 }

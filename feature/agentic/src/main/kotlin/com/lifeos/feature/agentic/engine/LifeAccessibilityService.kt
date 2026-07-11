@@ -109,6 +109,22 @@ class LifeAccessibilityService : AccessibilityService() {
 
         val isEnabled: Boolean get() = instance != null
 
+        /**
+         * Source of truth from system settings — survives process restarts and
+         * catches the case where the toggle is on but the service isn't bound.
+         */
+        fun isEnabledInSettings(context: android.content.Context): Boolean {
+            val enabled = android.provider.Settings.Secure.getString(
+                context.contentResolver,
+                android.provider.Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+            ) ?: return false
+            val component = android.content.ComponentName(context, LifeAccessibilityService::class.java)
+            return enabled.split(':').any {
+                it.equals(component.flattenToString(), ignoreCase = true) ||
+                    it.equals(component.flattenToShortString(), ignoreCase = true)
+            }
+        }
+
         private const val TAG = "LifeAccessibility"
 
         init {

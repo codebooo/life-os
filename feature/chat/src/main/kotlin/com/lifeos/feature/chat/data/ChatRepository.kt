@@ -42,6 +42,7 @@ internal class DefaultChatRepository @Inject constructor(
     private val aiRouter: AiRouter,
     private val toolbox: JarvisToolbox,
     private val debug: JarvisDebug,
+    private val publicMirror: com.lifeos.core.common.storage.LifeOsPublicMirror,
 ) : ChatRepository {
 
     override fun observeConversations(): Flow<List<AiConversationEntity>> =
@@ -140,8 +141,30 @@ internal class DefaultChatRepository @Inject constructor(
             accumulated.append(acted)
             persistAssistant()
             chatDao.touchConversation(convId, updatedAt = System.currentTimeMillis())
+            mirrorConversation(convId)
             emit(ReplyProgress.Delta(acted))
             emit(ReplyProgress.Done(convId))
+        }
+    }
+
+    /** Writes the whole conversation as Markdown into /LifeOS/Jarvis (no-op without all-files access). */
+    private suspend fun mirrorConversation(convId: Long) {
+        runCatching {
+            val messages = chatDao.getMessages(convId)
+            if (messages.isEmpty()) return
+            val title = messages.first().content.take(40).replace(Regex("[^A-Za-z0-9 _-]"), "").trim()
+                .ifBlank { "chat" }
+            val md = buildString {
+                appendLine("# $title")
+                appendLine()
+                messages.forEach { message ->
+                    appendLine(if (message.role == ROLE_USER) "**You:**" else "**Jarvis:**")
+                    appendLine()
+                    appendLine(message.content.trim())
+                    appendLine()
+                }
+            }
+            publicMirror.writeText("Jarvis", "$title-$convId.md", md)
         }
     }
 
@@ -153,10 +176,12 @@ internal class DefaultChatRepository @Inject constructor(
         const val ROLE_USER = "user"
         const val ROLE_ASSISTANT = "assistant"
         const val SYSTEM_PROMPT =
-            "You are Jarvis, a private on-device assistant for LifeOS. " +
-                "Answer directly in 1-3 short sentences. Plain text only — never output XML, " +
-                "role markers, or <start_of_turn>/<end_of_turn> tokens. " +
-                "Answer questions about the user's data ONLY from LIVE DATA below — " +
-                "never invent tasks, reminders or events that aren't listed."
+            "You are Jarvis, a capable general assistant for LifeOS. You happily do " +
+                "everything a good assistant does: answer questions, do math, write poems, " +
+                "stories, lists and advice, explain things, chat. Never refuse a normal " +
+                "request or claim you lack a capability. Answer directly, plain text only — " +
+                "never output XML, role markers, or <start_of_turn>/<end_of_turn> tokens. " +
+                "When (and only when) asked about the user's OWN tasks/reminders/notes/etc., " +
+                "answer from LIVE DATA below and never invent entries that aren't listed."
     }
 }

@@ -1,5 +1,6 @@
 package com.lifeos.feature.agentic
 
+import android.content.Context
 import androidx.lifecycle.viewModelScope
 import com.lifeos.core.ai.macro.MacroCompiler
 import com.lifeos.core.ai.macro.MacroStep
@@ -11,6 +12,7 @@ import com.lifeos.core.database.evolution.EvolutionDao
 import com.lifeos.core.database.evolution.InteractionLogEntity
 import com.lifeos.feature.agentic.engine.LifeAccessibilityService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.launch
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -24,6 +26,8 @@ data class MacrosUiState(
     val preview: List<MacroStep>? = null,
     val serviceEnabled: Boolean = false,
     val running: Boolean = false,
+    /** Macro opened in the detail screen, or null for the list. */
+    val detail: MacroEntity? = null,
     val message: String? = null,
 )
 
@@ -35,6 +39,9 @@ sealed interface MacrosUiEvent {
     data class Run(val macro: MacroEntity) : MacrosUiEvent
     data class ToggleEnabled(val macro: MacroEntity) : MacrosUiEvent
     data class Delete(val id: Long) : MacrosUiEvent
+    data class OpenDetail(val macro: MacroEntity) : MacrosUiEvent
+    data object CloseDetail : MacrosUiEvent
+    data class Rename(val macro: MacroEntity, val name: String) : MacrosUiEvent
     data object RefreshServiceState : MacrosUiEvent
     data object DismissMessage : MacrosUiEvent
 }
@@ -43,6 +50,7 @@ sealed interface MacrosUiEffect
 
 @HiltViewModel
 class MacrosViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val macroDao: MacroDao,
     private val macroCompiler: MacroCompiler,
     private val evolutionDao: EvolutionDao,
@@ -50,10 +58,14 @@ class MacrosViewModel @Inject constructor(
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** Bound instance OR the settings flag — either means the banner can go. */
+    private fun serviceOn(): Boolean =
+        LifeAccessibilityService.isEnabled || LifeAccessibilityService.isEnabledInSettings(context)
+
     init {
         viewModelScope.launch {
             macroDao.observeAll().collect { macros ->
-                updateState { it.copy(macros = macros, serviceEnabled = LifeAccessibilityService.isEnabled) }
+                updateState { it.copy(macros = macros, serviceEnabled = serviceOn()) }
             }
         }
     }
@@ -96,10 +108,15 @@ class MacrosViewModel @Inject constructor(
             is MacrosUiEvent.Run -> viewModelScope.launch {
                 val service = LifeAccessibilityService.instance
                 if (service == null) {
+                    val enabledInSettings = LifeAccessibilityService.isEnabledInSettings(context)
                     updateState {
                         it.copy(
-                            serviceEnabled = false,
-                            message = "Enable \"LifeOS Macros\" in accessibility settings first",
+                            serviceEnabled = enabledInSettings,
+                            message = if (enabledInSettings) {
+                                "Service enabled but not connected yet — toggle \"LifeOS Macros\" off and on once"
+                            } else {
+                                "Enable \"LifeOS Macros\" in accessibility settings first"
+                            },
                         )
                     }
                     return@launch
@@ -118,9 +135,19 @@ class MacrosViewModel @Inject constructor(
             is MacrosUiEvent.ToggleEnabled -> viewModelScope.launch {
                 macroDao.update(event.macro.copy(enabled = !event.macro.enabled))
             }
-            is MacrosUiEvent.Delete -> viewModelScope.launch { macroDao.delete(event.id) }
+            is MacrosUiEvent.Delete -> viewModelScope.launch {
+                macroDao.delete(event.id)
+                if (uiState.value.detail?.id == event.id) updateState { it.copy(detail = null) }
+            }
+            is MacrosUiEvent.OpenDetail -> updateState { it.copy(detail = event.macro) }
+            MacrosUiEvent.CloseDetail -> updateState { it.copy(detail = null) }
+            is MacrosUiEvent.Rename -> viewModelScope.launch {
+                val renamed = event.macro.copy(name = event.name.trim().ifBlank { event.macro.name })
+                macroDao.update(renamed)
+                updateState { it.copy(detail = renamed) }
+            }
             MacrosUiEvent.RefreshServiceState -> updateState {
-                it.copy(serviceEnabled = LifeAccessibilityService.isEnabled)
+                it.copy(serviceEnabled = serviceOn())
             }
             MacrosUiEvent.DismissMessage -> updateState { it.copy(message = null) }
         }

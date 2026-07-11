@@ -5,24 +5,22 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -32,14 +30,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -54,26 +54,34 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lifeos.core.database.calendar.CalendarEventEntity
-import com.lifeos.core.designsystem.component.SectionHeader
 import java.text.DateFormat
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
+private const val DAY_MS = CalendarViewModel.DAY_MS
 
 @Composable
 fun CalendarRoute(viewModel: CalendarViewModel = hiltViewModel()) {
@@ -97,6 +105,12 @@ fun CalendarRoute(viewModel: CalendarViewModel = hiltViewModel()) {
     CalendarScreen(uiState = uiState, onEvent = viewModel::onEvent)
 }
 
+/**
+ * Calendar (§Module 19, standalone-app cut): Month grid with event chips +
+ * agenda, Week and Day hour timelines with positioned event blocks, tap a slot
+ * to create at that hour, swipe or arrows to move between periods, Today jump,
+ * overflow for Proton sync / system mirror / ICS export.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun CalendarScreen(uiState: CalendarUiState, onEvent: (CalendarUiEvent) -> Unit) {
@@ -117,295 +131,373 @@ internal fun CalendarScreen(uiState: CalendarUiState, onEvent: (CalendarUiEvent)
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Calendar") },
+                title = { Text(periodTitle(uiState.viewMode, uiState.anchor)) },
                 actions = {
-                    IconButton(onClick = { onEvent(CalendarUiEvent.ToggleConnections) }) {
-                        Icon(Icons.Filled.CloudSync, contentDescription = "Proton sync + export")
+                    TextButton(onClick = { onEvent(CalendarUiEvent.Today) }) { Text("Today") }
+                    IconButton(onClick = { onEvent(CalendarUiEvent.Previous) }) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous")
                     }
-                    IconButton(onClick = {
-                        calendarPermission.launch(
-                            arrayOf(
-                                android.Manifest.permission.READ_CALENDAR,
-                                android.Manifest.permission.WRITE_CALENDAR,
-                            ),
-                        )
-                    }) {
-                        Icon(Icons.Filled.Sync, contentDescription = "Mirror to system calendar")
+                    IconButton(onClick = { onEvent(CalendarUiEvent.Next) }) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next")
+                    }
+                    Box {
+                        var menu by remember { mutableStateOf(false) }
+                        IconButton(onClick = { menu = true }) {
+                            Icon(Icons.Filled.MoreVert, contentDescription = "More")
+                        }
+                        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("Proton sync & export") },
+                                onClick = { onEvent(CalendarUiEvent.ToggleConnections); menu = false },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Mirror to system calendar") },
+                                onClick = {
+                                    calendarPermission.launch(
+                                        arrayOf(
+                                            android.Manifest.permission.READ_CALENDAR,
+                                            android.Manifest.permission.WRITE_CALENDAR,
+                                        ),
+                                    )
+                                    menu = false
+                                },
+                            )
+                        }
                     }
                 },
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { onEvent(CalendarUiEvent.ToggleEditor) }) {
+            FloatingActionButton(onClick = { onEvent(CalendarUiEvent.NewEventAt(uiState.selectedDay, 9)) }) {
                 Icon(Icons.Filled.Add, contentDescription = "New event")
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                // Horizontal swipe anywhere moves the period, like a real calendar app.
+                .pointerInputSwipe(
+                    onSwipeLeft = { onEvent(CalendarUiEvent.Next) },
+                    onSwipeRight = { onEvent(CalendarUiEvent.Previous) },
+                ),
+        ) {
             SingleChoiceSegmentedButtonRow(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
             ) {
                 CalendarViewMode.entries.forEachIndexed { index, mode ->
                     SegmentedButton(
                         selected = uiState.viewMode == mode,
                         onClick = { onEvent(CalendarUiEvent.SetViewMode(mode)) },
                         shape = SegmentedButtonDefaults.itemShape(index, CalendarViewMode.entries.size),
-                        label = { Text(mode.name.lowercase().replaceFirstChar { it.uppercase() }) },
-                    )
-                }
-            }
-            when (uiState.viewMode) {
-                CalendarViewMode.MONTH -> {
-                    MonthHeader(uiState.monthStart, onEvent)
-                    MonthGrid(uiState, onEvent)
-                    SectionHeader(
-                        title = "Agenda — " + DateFormat.getDateInstance(DateFormat.MEDIUM)
-                            .format(Date(uiState.selectedDay)),
-                    )
-                    DayAgenda(uiState, onEvent)
-                }
-                CalendarViewMode.WEEK -> WeekView(uiState, onEvent)
-                CalendarViewMode.DAY -> {
-                    WeekStrip(uiState, onEvent)
-                    DayTimeline(uiState, onEvent)
-                }
-            }
-        }
-    }
-
-    if (uiState.showEditor) {
-        EventEditorSheet(uiState, onEvent)
-    }
-    if (uiState.showConnections) {
-        ConnectionsSheet(uiState, onEvent)
-    }
-}
-
-@Composable
-private fun MonthHeader(monthStart: Long, onEvent: (CalendarUiEvent) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        IconButton(onClick = { onEvent(CalendarUiEvent.PreviousMonth) }) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous month")
-        }
-        Text(
-            SimpleDateFormat("LLLL yyyy", Locale.getDefault()).format(Date(monthStart)),
-            style = MaterialTheme.typography.titleLarge,
-        )
-        IconButton(onClick = { onEvent(CalendarUiEvent.NextMonth) }) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next month")
-        }
-    }
-}
-
-@Composable
-private fun MonthGrid(uiState: CalendarUiState, onEvent: (CalendarUiEvent) -> Unit) {
-    val days = remember(uiState.monthStart) { monthDays(uiState.monthStart) }
-    val eventDays = remember(uiState.monthEvents) {
-        uiState.monthEvents.groupBy { CalendarViewModel.startOfDay(it.startsAt) }
-    }
-
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(7),
-        modifier = Modifier.padding(horizontal = 8.dp),
-        userScrollEnabled = false,
-    ) {
-        items(days) { day ->
-            val selected = day != null && day == uiState.selectedDay
-            val count = day?.let { eventDays[it]?.size } ?: 0
-            Box(
-                modifier = Modifier
-                    .aspectRatio(1f)
-                    .padding(3.dp)
-                    .background(
-                        color = if (selected) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent,
-                        shape = CircleShape,
-                    )
-                    .clickable(enabled = day != null) { day?.let { onEvent(CalendarUiEvent.SelectDay(it)) } },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (day != null) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            SimpleDateFormat("d", Locale.getDefault()).format(Date(day)),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (selected) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            repeat(minOf(count, 3)) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(4.dp)
-                                        .background(MaterialTheme.colorScheme.primary, CircleShape),
-                                )
-                            }
-                        }
+                    ) {
+                        Text(mode.name.lowercase().replaceFirstChar { it.uppercase() })
                     }
                 }
             }
-        }
-    }
-}
 
-@Composable
-private fun DayAgenda(uiState: CalendarUiState, onEvent: (CalendarUiEvent) -> Unit) {
-    val dayEvents = uiState.monthEvents.filter {
-        CalendarViewModel.startOfDay(it.startsAt) == uiState.selectedDay
-    }
-    if (dayEvents.isEmpty()) {
-        Text(
-            "Free day. Guard it.",
-            modifier = Modifier.padding(16.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        return
-    }
-    LazyColumn {
-        items(dayEvents, key = { it.id }) { event ->
-            EventRow(event, onEvent)
-        }
-    }
-}
-
-/** Week view: seven day columns, events listed beneath each. */
-@Composable
-private fun WeekView(uiState: CalendarUiState, onEvent: (CalendarUiEvent) -> Unit) {
-    WeekStrip(uiState, onEvent)
-    SectionHeader(
-        title = DateFormat.getDateInstance(DateFormat.FULL).format(Date(uiState.selectedDay)),
-    )
-    DayAgenda(uiState, onEvent)
-}
-
-/** Horizontal 7-day selector for the week containing the selected day. */
-@Composable
-private fun WeekStrip(uiState: CalendarUiState, onEvent: (CalendarUiEvent) -> Unit) {
-    val weekDays = remember(uiState.selectedDay) {
-        val calendar = Calendar.getInstance().apply {
-            timeInMillis = uiState.selectedDay
-            set(Calendar.DAY_OF_WEEK, firstDayOfWeek)
-        }
-        (0..6).map { offset ->
-            Calendar.getInstance().apply {
-                timeInMillis = calendar.timeInMillis
-                add(Calendar.DAY_OF_YEAR, offset)
-            }.timeInMillis
-        }
-    }
-    val eventDays = remember(uiState.monthEvents) {
-        uiState.monthEvents.groupBy { CalendarViewModel.startOfDay(it.startsAt) }
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        weekDays.forEach { day ->
-            val selected = day == uiState.selectedDay
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.primaryContainer else androidx.compose.ui.graphics.Color.Transparent,
-                        RoundedCornerShape(12.dp),
-                    )
-                    .clickable { onEvent(CalendarUiEvent.SelectDay(day)) }
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-            ) {
-                Text(
-                    SimpleDateFormat("EEE", Locale.getDefault()).format(Date(day)),
-                    style = MaterialTheme.typography.labelSmall,
-                )
-                Text(
-                    SimpleDateFormat("d", Locale.getDefault()).format(Date(day)),
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                if ((eventDays[day]?.size ?: 0) > 0) {
-                    Box(
-                        modifier = Modifier
-                            .size(4.dp)
-                            .background(MaterialTheme.colorScheme.primary, CircleShape),
-                    )
-                }
+            when (uiState.viewMode) {
+                CalendarViewMode.MONTH -> MonthView(uiState, onEvent)
+                CalendarViewMode.WEEK -> WeekView(uiState, onEvent)
+                CalendarViewMode.DAY -> DayView(uiState, onEvent)
             }
         }
     }
+
+    if (uiState.showEditor) EventEditorSheet(uiState, onEvent)
+    if (uiState.showConnections) ConnectionsSheet(uiState, onEvent)
 }
 
-/** Day view: an hour-by-hour timeline with events pinned to their start hour. */
+/** Simple horizontal fling detection without a pager. */
+private fun Modifier.pointerInputSwipe(onSwipeLeft: () -> Unit, onSwipeRight: () -> Unit): Modifier =
+    this.then(
+        Modifier.pointerInput(Unit) {
+            var total = 0f
+            detectHorizontalDragGestures(
+                onDragStart = { total = 0f },
+                onHorizontalDrag = { change, amount ->
+                    change.consume()
+                    total += amount
+                },
+                onDragEnd = {
+                    when {
+                        total < -120f -> onSwipeLeft()
+                        total > 120f -> onSwipeRight()
+                    }
+                },
+            )
+        },
+    )
+
+// -------------------------------------------------------------------- month --
+
 @Composable
-private fun DayTimeline(uiState: CalendarUiState, onEvent: (CalendarUiEvent) -> Unit) {
-    val dayEvents = uiState.monthEvents
-        .filter { CalendarViewModel.startOfDay(it.startsAt) == uiState.selectedDay }
-        .groupBy { Calendar.getInstance().apply { timeInMillis = it.startsAt }.get(Calendar.HOUR_OF_DAY) }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
-    ) {
-        (0..23).forEach { hour ->
-            Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)) {
+private fun MonthView(uiState: CalendarUiState, onEvent: (CalendarUiEvent) -> Unit) {
+    val gridStart = CalendarViewModel.startOfWeek(uiState.anchor)
+    val monthOfAnchor = Calendar.getInstance().apply { timeInMillis = uiState.anchor }.get(Calendar.MONTH)
+    val today = CalendarViewModel.startOfDay(System.currentTimeMillis())
+    val eventsByDay = remember(uiState.events) {
+        uiState.events.groupBy { CalendarViewModel.startOfDay(it.startsAt) }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+            listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun").forEach { day ->
                 Text(
-                    "%02d:00".format(hour),
+                    day,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.width(48.dp),
                 )
-                Column(modifier = Modifier.weight(1f)) {
-                    val slot = dayEvents[hour].orEmpty()
-                    if (slot.isEmpty()) {
+            }
+        }
+        repeat(6) { week ->
+            Row(modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 8.dp)) {
+                repeat(7) { column ->
+                    val day = gridStart + (week * 7 + column) * DAY_MS
+                    val inMonth = Calendar.getInstance().apply { timeInMillis = day }
+                        .get(Calendar.MONTH) == monthOfAnchor
+                    val dayEvents = eventsByDay[day].orEmpty()
+                    val selected = day == uiState.selectedDay
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .padding(1.dp)
+                            .background(
+                                when {
+                                    selected -> MaterialTheme.colorScheme.primaryContainer
+                                    else -> MaterialTheme.colorScheme.surface
+                                },
+                                RoundedCornerShape(8.dp),
+                            )
+                            .clickable { onEvent(CalendarUiEvent.SelectDay(day)) }
+                            .padding(2.dp),
+                    ) {
                         Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                        )
-                        Spacer(modifier = Modifier.height(20.dp))
-                    } else {
-                        slot.forEach { event ->
-                            Card(
-                                onClick = { onEvent(CalendarUiEvent.EditEvent(event)) },
+                                .padding(start = 2.dp, top = 2.dp)
+                                .then(
+                                    if (day == today) {
+                                        Modifier.background(MaterialTheme.colorScheme.primary, CircleShape)
+                                    } else {
+                                        Modifier
+                                    },
+                                ),
+                        ) {
+                            Text(
+                                Calendar.getInstance().apply { timeInMillis = day }
+                                    .get(Calendar.DAY_OF_MONTH).toString(),
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = when {
+                                    day == today -> MaterialTheme.colorScheme.onPrimary
+                                    inMonth -> MaterialTheme.colorScheme.onSurface
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                },
+                            )
+                        }
+                        dayEvents.take(2).forEach { event ->
+                            Text(
+                                event.title,
+                                maxLines = 1,
+                                overflow = TextOverflow.Clip,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(bottom = 4.dp),
-                            ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    Text(
-                                        event.title,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
+                                    .padding(top = 1.dp)
+                                    .background(
+                                        MaterialTheme.colorScheme.secondaryContainer,
+                                        RoundedCornerShape(4.dp),
                                     )
-                                    val fmt = DateFormat.getTimeInstance(DateFormat.SHORT)
-                                    Text(
-                                        "${fmt.format(Date(event.startsAt))} – ${fmt.format(Date(event.endsAt))}" +
-                                            (event.location?.let { " · $it" } ?: ""),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            }
+                                    .padding(horizontal = 3.dp),
+                            )
+                        }
+                        if (dayEvents.size > 2) {
+                            Text(
+                                "+${dayEvents.size - 2}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 3.dp),
+                            )
                         }
                     }
                 }
             }
         }
+        HorizontalDivider()
+        // Agenda for the selected day.
+        val selectedEvents = eventsByDay[uiState.selectedDay].orEmpty().sortedBy { it.startsAt }
+        LazyColumn(modifier = Modifier.fillMaxWidth().weight(1.2f)) {
+            if (selectedEvents.isEmpty()) {
+                item {
+                    Text(
+                        "Nothing on ${DAY_TITLE.format(Date(uiState.selectedDay))} — tap + to add.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+            }
+            items(selectedEvents, key = { it.id }) { event -> EventRow(event, onEvent) }
+        }
     }
 }
+
+// ----------------------------------------------------------------- timeline --
+
+private val HOUR_HEIGHT = 56.dp
+
+@Composable
+private fun WeekView(uiState: CalendarUiState, onEvent: (CalendarUiEvent) -> Unit) {
+    val days = (0 until 7).map { uiState.anchor + it * DAY_MS }
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(start = 44.dp, end = 8.dp)) {
+            days.forEach { day ->
+                val isSelected = day == uiState.selectedDay
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onEvent(CalendarUiEvent.SelectDay(day)) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        WEEKDAY.format(Date(day)),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        DAY_NUM.format(Date(day)),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        }
+        Timeline(days = days, events = uiState.events, onEvent = onEvent)
+    }
+}
+
+@Composable
+private fun DayView(uiState: CalendarUiState, onEvent: (CalendarUiEvent) -> Unit) {
+    val allDay = uiState.events.filter { it.allDay && CalendarViewModel.startOfDay(it.startsAt) == uiState.anchor }
+    Column(modifier = Modifier.fillMaxSize()) {
+        allDay.forEach { event ->
+            Surface(
+                onClick = { onEvent(CalendarUiEvent.EditEvent(event)) },
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+            ) {
+                Text(
+                    "All day · ${event.title}",
+                    modifier = Modifier.padding(8.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
+        Timeline(days = listOf(uiState.anchor), events = uiState.events, onEvent = onEvent)
+    }
+}
+
+/** Shared hour grid: 24 rows, tappable slots, positioned event blocks, now-line. */
+@Composable
+private fun Timeline(
+    days: List<Long>,
+    events: List<CalendarEventEntity>,
+    onEvent: (CalendarUiEvent) -> Unit,
+) {
+    val scroll = rememberScrollState(initial = with(LocalDensity.current) { (HOUR_HEIGHT * 7).roundToPx() })
+    val now = System.currentTimeMillis()
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scroll),
+    ) {
+        Column(modifier = Modifier.width(44.dp)) {
+            repeat(24) { hour ->
+                Box(modifier = Modifier.height(HOUR_HEIGHT), contentAlignment = Alignment.TopCenter) {
+                    Text(
+                        "%02d".format(hour),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        days.forEach { day ->
+            val dayEvents = events.filter {
+                !it.allDay && it.startsAt < day + DAY_MS && it.endsAt > day
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(HOUR_HEIGHT * 24)
+                    .padding(horizontal = 1.dp)
+                    .pointerInput(day) {
+                        detectTapGestures { offset ->
+                            val hour = (offset.y / (HOUR_HEIGHT.toPx())).toInt().coerceIn(0, 23)
+                            onEvent(CalendarUiEvent.NewEventAt(day, hour))
+                        }
+                    },
+            ) {
+                // Hour grid lines.
+                repeat(24) { hour ->
+                    HorizontalDivider(
+                        modifier = Modifier.offset(y = HOUR_HEIGHT * hour),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                    )
+                }
+                dayEvents.forEach { event ->
+                    val startMin = ((maxOf(event.startsAt, day) - day) / 60_000L).toInt()
+                    val endMin = ((minOf(event.endsAt, day + DAY_MS) - day) / 60_000L).toInt()
+                    val height = ((endMin - startMin).coerceAtLeast(24) / 60f)
+                    Surface(
+                        onClick = { onEvent(CalendarUiEvent.EditEvent(event)) },
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .offset(y = HOUR_HEIGHT * (startMin / 60f))
+                            .height(HOUR_HEIGHT * height),
+                    ) {
+                        Column(modifier = Modifier.padding(4.dp)) {
+                            Text(
+                                event.title,
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                            Text(
+                                TIME.format(Date(event.startsAt)),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                            )
+                        }
+                    }
+                }
+                // Current-time indicator on today's column.
+                if (CalendarViewModel.startOfDay(now) == day) {
+                    val nowMin = ((now - day) / 60_000L).toInt()
+                    HorizontalDivider(
+                        modifier = Modifier.offset(y = HOUR_HEIGHT * (nowMin / 60f)),
+                        thickness = 2.dp,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ------------------------------------------------------------------- shared --
 
 @Composable
 private fun EventRow(event: CalendarEventEntity, onEvent: (CalendarUiEvent) -> Unit) {
@@ -424,7 +516,7 @@ private fun EventRow(event: CalendarEventEntity, onEvent: (CalendarUiEvent) -> U
                         append(timeFormat.format(Date(event.endsAt)))
                     }
                     event.location?.let { append("  ·  $it") }
-                    if (event.reminderId != null) append("  ·  🔔")
+                    if (event.reminderId != null) append("  ·  reminder set")
                 },
             )
         },
@@ -452,7 +544,8 @@ private fun EventEditorSheet(uiState: CalendarUiState, onEvent: (CalendarUiEvent
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                if (uiState.editingEventId != null) "Edit event" else "New event",
+                if (uiState.editingEventId != null) "Edit event" else
+                    "New event · ${DAY_TITLE.format(Date(uiState.selectedDay))}",
                 style = MaterialTheme.typography.titleLarge,
             )
             OutlinedTextField(
@@ -514,12 +607,17 @@ private fun EventEditorSheet(uiState: CalendarUiState, onEvent: (CalendarUiEvent
                     )
                 }
             }
-            Button(
-                onClick = { onEvent(CalendarUiEvent.Save) },
-                enabled = uiState.editorTitle.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(if (uiState.editingEventId != null) "Save changes" else "Create")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { onEvent(CalendarUiEvent.Save) },
+                    enabled = uiState.editorTitle.isNotBlank(),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(if (uiState.editingEventId != null) "Save changes" else "Create")
+                }
+                uiState.editingEventId?.let { id ->
+                    OutlinedButton(onClick = { onEvent(CalendarUiEvent.Delete(id)) }) { Text("Delete") }
+                }
             }
         }
     }
@@ -569,16 +667,18 @@ private fun ConnectionsSheet(uiState: CalendarUiState, onEvent: (CalendarUiEvent
     }
 }
 
-/** Leading nulls pad the grid so day 1 lands on the right weekday column. */
-private fun monthDays(monthStart: Long): List<Long?> {
-    val calendar = Calendar.getInstance().apply { timeInMillis = monthStart }
-    val firstWeekday = calendar.get(Calendar.DAY_OF_WEEK)
-    val offset = (firstWeekday - calendar.firstDayOfWeek + 7) % 7
-    val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
-    return List(offset) { null } + (0 until daysInMonth).map { day ->
-        Calendar.getInstance().apply {
-            timeInMillis = monthStart
-            add(Calendar.DAY_OF_YEAR, day)
-        }.timeInMillis
+private fun periodTitle(mode: CalendarViewMode, anchor: Long): String = when (mode) {
+    CalendarViewMode.MONTH -> MONTH_TITLE.format(Date(anchor))
+    CalendarViewMode.WEEK -> {
+        val end = anchor + 6 * DAY_MS
+        "${DAY_SHORT.format(Date(anchor))} – ${DAY_SHORT.format(Date(end))}"
     }
+    CalendarViewMode.DAY -> DAY_TITLE.format(Date(anchor))
 }
+
+private val MONTH_TITLE = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
+private val DAY_TITLE = SimpleDateFormat("EEE d MMM", Locale.getDefault())
+private val DAY_SHORT = SimpleDateFormat("d MMM", Locale.getDefault())
+private val WEEKDAY = SimpleDateFormat("EEE", Locale.getDefault())
+private val DAY_NUM = SimpleDateFormat("d", Locale.getDefault())
+private val TIME = SimpleDateFormat("HH:mm", Locale.getDefault())

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
@@ -32,6 +33,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,7 +56,22 @@ fun MacrosRoute(viewModel: MacrosViewModel = hiltViewModel()) {
             viewModel.onEvent(MacrosUiEvent.DismissMessage)
         }
     }
-    LaunchedEffect(Unit) { viewModel.onEvent(MacrosUiEvent.RefreshServiceState) }
+    // Re-check whenever the screen resumes (e.g. returning from accessibility settings).
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.onEvent(MacrosUiEvent.RefreshServiceState)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    uiState.detail?.let { macro ->
+        MacroDetailScreen(macro = macro, uiState = uiState, onEvent = viewModel::onEvent)
+        return
+    }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Macros") }) },
@@ -105,7 +122,7 @@ fun MacrosRoute(viewModel: MacrosViewModel = hiltViewModel()) {
             }
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(uiState.macros, key = { it.id }) { macro ->
-                    Card {
+                    Card(onClick = { viewModel.onEvent(MacrosUiEvent.OpenDetail(macro)) }) {
                         Row(
                             modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -170,3 +187,101 @@ fun MacrosRoute(viewModel: MacrosViewModel = hiltViewModel()) {
 }
 
 private fun stepCount(stepsJson: String): Int = stepsJson.count { it == '{' }
+
+/**
+ * Macro detail (§Module 12): full step list, rename, run and delete —
+ * opened by tapping a macro card.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MacroDetailScreen(
+    macro: com.lifeos.core.database.agentic.MacroEntity,
+    uiState: MacrosUiState,
+    onEvent: (MacrosUiEvent) -> Unit,
+) {
+    var name by remember(macro.id) { androidx.compose.runtime.mutableStateOf(macro.name) }
+    val steps = remember(macro.stepsJson) {
+        runCatching {
+            kotlinx.serialization.json.Json { ignoreUnknownKeys = true }.decodeFromString(
+                kotlinx.serialization.builtins.ListSerializer(com.lifeos.core.ai.macro.MacroStep.serializer()),
+                macro.stepsJson,
+            )
+        }.getOrDefault(emptyList())
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Macro") },
+                navigationIcon = {
+                    IconButton(onClick = { onEvent(MacrosUiEvent.CloseDetail) }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { onEvent(MacrosUiEvent.Delete(macro.id)) }) {
+                        Icon(Icons.Filled.Delete, contentDescription = "Delete")
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .padding(innerPadding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Name") },
+                singleLine = true,
+                trailingIcon = {
+                    TextButton(onClick = { onEvent(MacrosUiEvent.Rename(macro, name)) }) { Text("Save") }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                "Prompt: ${macro.nlPrompt}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(
+                onClick = { onEvent(MacrosUiEvent.Run(macro)) },
+                enabled = macro.enabled && !uiState.running,
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(if (uiState.running) "Running…" else "Run macro") }
+            if (uiState.running) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+
+            Text("Steps (${steps.size})", style = MaterialTheme.typography.titleMedium)
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(steps.size) { index ->
+                    val step = steps[index]
+                    Card {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                "${index + 1}. ${step.action}",
+                                style = MaterialTheme.typography.titleSmall,
+                            )
+                            listOfNotNull(
+                                step.target?.let { "Target: $it" },
+                                step.text?.let { "Text: $it" },
+                                step.delayMs?.let { "Wait: ${it}ms" },
+                            ).forEach {
+                                Text(
+                                    it,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

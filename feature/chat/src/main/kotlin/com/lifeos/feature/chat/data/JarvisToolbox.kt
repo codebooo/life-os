@@ -9,6 +9,7 @@ import com.lifeos.core.database.memex.MemexDao
 import com.lifeos.core.database.notes.NoteDao
 import com.lifeos.core.database.reminders.ReminderDao
 import com.lifeos.core.database.todo.TodoDao
+import com.lifeos.core.common.storage.LifeOsPublicMirror
 import com.lifeos.core.model.LifeModule
 import com.lifeos.core.model.SourceRef
 import com.lifeos.core.service.LifeAction
@@ -43,18 +44,21 @@ class JarvisToolbox @Inject constructor(
     private val packageDao: PackageDao,
     private val financeDao: FinanceDao,
     private val bookDao: BookDao,
+    private val publicMirror: LifeOsPublicMirror,
 ) {
 
     /** The tool contract the model sees. Kept terse — every char costs latency. */
     val toolSpec: String =
         """
-        To CHANGE things, emit commands on their own line, exactly:
+        To CHANGE the user's LifeOS data, emit commands on their own line, exactly:
         [[add_task: title]] [[done_task: id]] [[delete_task: id]]
         [[timer: 5m]] [[remind: 18:00 | title]] [[remind: +25m | title]] [[cancel_reminder: id]]
         [[event: tomorrow 15:00 | title]] [[note: title | body]]
-        Rules: To ANSWER a question, read LIVE DATA below and reply in plain words NOW — do not
-        say you will look, search, or check; the data is already in front of you. Emit a command
-        ONLY to change something. Use ids from LIVE DATA. Never claim an action you didn't emit.
+        [[edit_note: title | new full body]] [[append_note: title | text to add]]
+        Rules: Commands are ONLY for changing LifeOS data — for everything else (questions,
+        math, writing, chat) just answer normally in plain words using LIVE DATA when it's
+        about the user's own items. The data is already in front of you: never say you will
+        look or search. Use ids from LIVE DATA. Never claim an action you didn't emit.
         """.trimIndent()
 
     /** Live cross-module state, compact, with stable ids the model can act on. */
@@ -134,7 +138,13 @@ class JarvisToolbox @Inject constructor(
      */
     suspend fun runActions(modelText: String, debug: JarvisDebug? = null): String {
         val results = mutableListOf<String>()
-        TOOL_TAG.findAll(modelText).forEach { match ->
+        // Small models often drop one closing bracket ("…body.]"). Repair
+        // lines that open a tool tag but only close with a single ']'.
+        val repaired = modelText.lineSequence().joinToString("\n") { line ->
+            val t = line.trimEnd()
+            if (t.startsWith("[[") && !t.endsWith("]]") && t.endsWith("]")) "$t]" else line
+        }
+        TOOL_TAG.findAll(repaired).forEach { match ->
             val tool = match.groupValues[1].trim().lowercase()
             val args = match.groupValues[2].trim()
             runCatching { execute(tool, args) }
@@ -144,7 +154,7 @@ class JarvisToolbox @Inject constructor(
                     debug?.add("tool-error", "$tool($args): ${it.message}")
                 }
         }
-        var cleaned = modelText.replace(TOOL_TAG, "")
+        var cleaned = repaired.replace(TOOL_TAG, "")
         // Small models sometimes narrate intent ("I'll search the notes for…")
         // instead of answering. Drop those stray meta-lines so the reply reads clean.
         cleaned = cleaned.lineSequence()
@@ -201,8 +211,34 @@ class JarvisToolbox @Inject constructor(
             dispatcher.dispatch(LifeAction.CreateNote(title.take(48), body.ifBlank { title }, SOURCE))
             "Note saved: ${title.take(48)}"
         }
+        "edit_note" -> rewriteNote(args, append = false)
+        "append_note" -> rewriteNote(args, append = true)
         "search" -> search(args)
         else -> null
+    }
+
+    /** Rewrites (or appends to) a plain note's file by fuzzy title match. */
+    private suspend fun rewriteNote(args: String, append: Boolean): String {
+        val (titleQuery, newBody) = splitArgs(args)
+        if (titleQuery.isBlank() || newBody.isBlank()) error("need: title | body")
+        val notes = noteDao.observeAll().first()
+        val q = titleQuery.lowercase()
+        val note = notes.firstOrNull { it.title.lowercase() == q }
+            ?: notes.firstOrNull { q in it.title.lowercase() || it.title.lowercase() in q }
+            ?: error("no note titled \"$titleQuery\"")
+        if (note.bodyVaultRef != null) error("\"${note.title}\" is vault-locked")
+        return withContext(Dispatchers.IO) {
+            val file = File(note.path)
+            val content = if (append) {
+                (file.takeIf { it.exists() }?.readText().orEmpty().trimEnd() + "\n" + newBody)
+            } else {
+                newBody
+            }
+            file.writeText(content)
+            publicMirror.writeText("Notes", file.name, content)
+            noteDao.update(note.copy(updatedAt = System.currentTimeMillis()))
+            if (append) "Added to note \"${note.title}\"" else "Note \"${note.title}\" updated"
+        }
     }
 
     private suspend fun withTask(args: String, act: suspend (Long, String) -> String): String {
