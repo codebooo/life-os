@@ -53,6 +53,11 @@ import com.lifeos.core.database.downloads.DownloadDao
 import com.lifeos.core.database.downloads.DownloadEntity
 import com.lifeos.core.database.plants.MyPlantEntity
 import com.lifeos.core.database.plants.PlantDao
+import com.lifeos.core.database.brick.BrickAppLimitEntity
+import com.lifeos.core.database.brick.BrickDao
+import com.lifeos.core.database.brick.BrickProfileEntity
+import com.lifeos.core.database.brick.BrickSessionEntity
+import com.lifeos.core.database.brick.BrickUsageEntity
 import com.lifeos.core.database.screentime.AppUsageEntity
 import com.lifeos.core.database.screentime.ScreenTimeDao
 import com.lifeos.core.database.screentime.ScreenTimeDayEntity
@@ -95,8 +100,12 @@ import com.lifeos.core.database.screentime.ScreenTimeDayEntity
         MyPlantEntity::class,
         ScreenTimeDayEntity::class,
         AppUsageEntity::class,
+        BrickProfileEntity::class,
+        BrickAppLimitEntity::class,
+        BrickSessionEntity::class,
+        BrickUsageEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -111,6 +120,7 @@ import com.lifeos.core.database.screentime.ScreenTimeDayEntity
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
         AutoMigration(from = 12, to = 13),
+        AutoMigration(from = 13, to = 14),
     ],
 )
 abstract class LifeDatabase : RoomDatabase() {
@@ -135,6 +145,7 @@ abstract class LifeDatabase : RoomDatabase() {
     abstract fun downloadDao(): DownloadDao
     abstract fun plantDao(): PlantDao
     abstract fun screenTimeDao(): ScreenTimeDao
+    abstract fun brickDao(): BrickDao
 
     companion object {
         const val NAME = "life-os.db"

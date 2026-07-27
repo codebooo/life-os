@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
+
+    <application>
+        <!--
+          Brick's blocker (§Module Brick). exported="true" is required for the
+          system to bind an accessibility service; it is still only usable
+          after the user enables it in accessibility settings.
+        -->
+        <service
+            android:name="com.lifeos.feature.brick.engine.BrickAccessibilityService"
+            android:exported="true"
+            android:label="LifeOS Brick"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/brick_accessibility_config" />
+        </service>
+
+        <!-- The full-screen wall shown instead of a blocked app. -->
+        <activity
+            android:name="com.lifeos.feature.brick.ui.BlockWallActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleInstance"
+            android:noHistory="true"
+            android:taskAffinity="com.lifeos.brick.wall"
+            android:theme="@style/Theme.LifeOs" />
+
+        <!--
+          Tag tap entry point: scanning the paired NFC tag opens this, which
+          flips the matching Brick mode on or off and closes again.
+        -->
+        <activity
+            android:name="com.lifeos.feature.brick.nfc.BrickNfcActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:noHistory="true"
+            android:taskAffinity="com.lifeos.brick.nfc"
+            android:theme="@style/Theme.LifeOs">
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/vnd.lifeos.brick" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.nfc.action.TECH_DISCOVERED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.nfc.action.TECH_DISCOVERED"
+                android:resource="@xml/brick_nfc_tech" />
+        </activity>
+
+        <receiver
+            android:name="com.lifeos.feature.brick.data.BrickScheduleReceiver"
+            android:exported="false" />
+    </application>
+
+</manifest>

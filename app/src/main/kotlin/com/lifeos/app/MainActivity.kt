@@ -12,11 +12,14 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import com.lifeos.app.ui.LifeOsApp
 import com.lifeos.core.datastore.SettingsRepository
 import com.lifeos.core.designsystem.theme.LifeOsTheme
 import com.lifeos.core.designsystem.theme.PALETTE_DYNAMIC
 import com.lifeos.core.service.LifeOsForegroundService
+import com.lifeos.feature.brick.data.BrickRepository
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -25,6 +28,9 @@ class MainActivity : FragmentActivity() {
 
     @Inject
     lateinit var settingsRepository: SettingsRepository
+
+    @Inject
+    lateinit var brickRepository: BrickRepository
 
     /** Bumped each time the assistant gesture asks for quick capture. */
     private val captureRequests = mutableStateOf(0)
@@ -37,6 +43,8 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
 
         LifeOsForegroundService.start(this)
+        // Reload any live Brick mode and re-arm its time windows (survives reboots).
+        lifecycleScope.launch { brickRepository.refresh() }
         requestNotificationsPermission()
         if (isCaptureIntent(intent)) captureRequests.value++
 

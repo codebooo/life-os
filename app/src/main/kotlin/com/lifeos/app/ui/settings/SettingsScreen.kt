@@ -266,6 +266,13 @@ fun SettingsRoute(
                 }
             }
 
+            SystemSettingRow(
+                title = "App blocking (Brick)",
+                subtitle = "Enable \"LifeOS Brick\" so blocking modes can stop blocked apps from opening",
+            ) {
+                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+
             SectionHeader(title = "Storage")
             SystemSettingRow(
                 title = "Readable /LifeOS folder",
