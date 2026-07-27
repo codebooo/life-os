@@ -23,6 +23,7 @@ import com.lifeos.core.database.adhd.FocusDao
 import com.lifeos.core.database.evolution.EvolutionDao
 import com.lifeos.core.database.downloads.DownloadDao
 import com.lifeos.core.database.plants.PlantDao
+import com.lifeos.core.database.brick.BrickDao
 import com.lifeos.core.database.screentime.ScreenTimeDao
 import dagger.Module
 import dagger.Provides
@@ -103,4 +104,7 @@ internal object DatabaseModule {
 
     @Provides
     fun provideScreenTimeDao(database: LifeDatabase): ScreenTimeDao = database.screenTimeDao()
+
+    @Provides
+    fun provideBrickDao(database: LifeDatabase): BrickDao = database.brickDao()
 }

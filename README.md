@@ -7,7 +7,7 @@ or on your own NAS (Ollama). No third-party cloud, ever.
 **Spec:** [`docs/PRODUCTION_PLAN.md`](docs/PRODUCTION_PLAN.md). Every module
 and rule traces back to a section (and often a community demand source) there.
 
-## Status — v0.1.0-alpha.16
+## Status — v0.1.0-alpha.17
 
 | Area | State |
 |---|---|
@@ -43,6 +43,7 @@ and rule traces back to a section (and often a community demand source) there.
 | Focus timer: tap the ring for a custom HH:MM:SS time, plus an "Overlay" button that floats the countdown over any app (tap once for a close X that leaves it running); Overwhelm overlay now follows the theme | ✅ |
 | Screen Time: mirrors Android digital-wellbeing into LifeOS and keeps it forever (survives Samsung's ~monthly purge) — weekly bars + average, week scrolling, per-app breakdown, unlocks, JSON export | ✅ |
 | Screen Time · Plants (custom photos + care atlas) · News · Downloader on Home; NAS server apps redesigned as an app-store list; Jarvis answers from a live data snapshot (note bodies included) and a Developer Options "Jarvis Debugging" toggle exposes snapshot/output/tool-calls with a copy button | ✅ |
+| Brick (§Module Brick): tap-to-block modes — pick blocked apps + optional per-app daily allowances, turn a mode on/off by NFC tag, time window or by hand, strict mode refuses early exits; blocked apps hit a full-screen wall via an accessibility blocker (the only route Android gives a sideloaded app). Blocking rules covered by unit tests | ✅ |
 | Deferred post-alpha: Glance home-screen widgets, HA WebSocket live state/zones, Vault unlock UI, first-run onboarding checklist (grants live in Settings → System access), FinTS bank sync | 🔜 |
 
 **Google-free by design:** no Google service is ever called at runtime (no Play Services, no Google recognizer, no Google Maps). Remaining Google-*authored* open-source, fully on-device libraries: AndroidX/Jetpack (unavoidable on Android), MediaPipe (Gemma inference), ML Kit on-device OCR/barcode (no network) — swap candidates documented in the plan.
@@ -52,7 +53,7 @@ and rule traces back to a section (and often a community demand source) there.
 Grab `lifeos-v*.apk` from [Releases](../../releases), then:
 
 ```
-adb install -r -g lifeos-v0.1.0-alpha.16.apk
+adb install -r -g lifeos-v0.1.0-alpha.17.apk
 ```
 
 or copy to the phone and allow *Install unknown apps*. Android 13+ (minSdk 33).
@@ -80,7 +81,8 @@ app/                   Shell: theme, bottom bar, NavHost, Home grid + planner ca
 core/{model,common,designsystem,database,datastore,network,ai,service,vault,ui}
 feature/{chat,capture,notes,reminders,todo,calendar,messagecenter,dhl,
          imagereasoning,finance,email,nas,books,route,smarthome,planner,
-         clock,adhd,memex,agentic,evolution,downloader,plants,news,vault}
+         clock,adhd,memex,agentic,evolution,downloader,plants,news,vault,
+         screentime,brick}
 build-logic/           Convention plugins
 docs/PRODUCTION_PLAN.md
 ```

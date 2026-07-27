@@ -88,6 +88,9 @@ sealed interface LifeDestination {
 
     @Serializable
     data object ScreenTime : LifeDestination
+
+    @Serializable
+    data object Brick : LifeDestination
 }
 
 const val DEEP_LINK_SCHEME = "lifeos"

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.LocalFlorist
 import androidx.compose.material.icons.filled.Newspaper
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Timelapse
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.automirrored.filled.ViewList
@@ -199,6 +200,12 @@ fun HomeScreen(
             destination = LifeDestination.News,
         ),
         AppGridItem(
+            label = "Brick",
+            description = "Tap-to-block modes for distracting apps",
+            icon = Icons.Filled.Shield,
+            destination = LifeDestination.Brick,
+        ),
+        AppGridItem(
             label = "Screen Time",
             description = "Digital wellbeing, kept forever",
             icon = Icons.Filled.Timelapse,
@@ -227,15 +234,15 @@ fun HomeScreen(
                 Text(
                     "LifeOS",
                     style = MaterialTheme.typography.headlineMedium,
-                    // Hold for a full 5 seconds (not the ~0.5s system long-press) to
-                    // reveal the hidden Vault — deliberate, hard to trigger by accident.
+                    // Hold for 3 seconds (not the ~0.5s system long-press) to reveal
+                    // the hidden Vault — deliberate, hard to trigger by accident.
                     modifier = Modifier.pointerInput(Unit) {
                         awaitEachGesture {
                             awaitFirstDown()
-                            val revealed = withTimeoutOrNull(5_000L) {
+                            val revealed = withTimeoutOrNull(3_000L) {
                                 waitForUpOrCancellation()
-                                false // released before 5s
-                            } ?: true // 5s elapsed while still held
+                                false // released before 3s
+                            } ?: true // 3s elapsed while still held
                             if (revealed) vaultRevealed = true
                         }
                     },

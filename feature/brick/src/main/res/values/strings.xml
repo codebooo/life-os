@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="brick_service_description">Blocks the apps you chose while a Brick mode is running. LifeOS only checks which app is in front — no screen content is read, and nothing leaves the device.</string>
+</resources>

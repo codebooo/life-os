@@ -49,9 +49,16 @@ class ScreenTimeCollector @Inject constructor(
         if (!hasPermission()) return@withContext
         val usageManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val packageManager = context.packageManager
+        // Stored days never change again, so only fetch what is missing — plus
+        // today and yesterday, which are still accumulating.
+        val alreadyStored = dao.capturedDates().toSet()
 
         for (offset in 0 until days) {
-            val (dayStart, dayEnd, dateKey) = dayBounds(offset)
+            val bounds = dayBounds(offset)
+            val dayStart = bounds.start
+            val dayEnd = bounds.end
+            val dateKey = bounds.key
+            if (offset > 1 && dateKey in alreadyStored) continue
             val stats = usageManager.queryAndAggregateUsageStats(dayStart, dayEnd)
             if (stats.isEmpty()) continue
 
