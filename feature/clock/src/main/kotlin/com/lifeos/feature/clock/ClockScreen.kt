@@ -3,9 +3,9 @@ package com.lifeos.feature.clock
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +19,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -29,6 +31,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -52,18 +55,23 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lifeos.core.designsystem.component.EmptyState
-import kotlinx.coroutines.delay
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -71,6 +79,7 @@ import java.time.format.DateTimeFormatter
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
+import kotlinx.coroutines.delay
 
 /** Clock module (§Module 4): faces, world clock, stopwatch, timer. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -470,6 +479,8 @@ private fun TimerTab() {
     var remainingSeconds by remember { mutableLongStateOf(0L) }
     var running by remember { mutableStateOf(false) }
     var showAsSeconds by remember { mutableStateOf(false) }
+    // null = wheels; 0/1/2 = typing into hours/minutes/seconds.
+    var typedField by remember { mutableStateOf<Int?>(null) }
 
     LaunchedEffect(running) {
         while (running && remainingSeconds > 0) {
@@ -500,19 +511,32 @@ private fun TimerTab() {
                 Icon(Icons.Filled.SwapHoriz, contentDescription = null)
                 Text(if (showAsSeconds) "  Show mm:ss" else "  Show seconds")
             }
+        } else if (typedField != null) {
+            // Typed entry: number keyboard, auto-advancing to the next field.
+            TypedDuration(
+                hours = hours,
+                minutes = minutes,
+                seconds = seconds,
+                startField = typedField ?: 0,
+                onHours = { hours = it },
+                onMinutes = { minutes = it },
+                onSeconds = { seconds = it },
+                onDone = { typedField = null },
+            )
         } else {
-            // Samsung-style three infinite wheels.
+            // Samsung-style three infinite wheels; tap one to type instead.
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                WheelPicker(range = 0..99, value = hours, onValue = { hours = it })
+                WheelPicker(range = 0..99, value = hours, onValue = { hours = it }, onTap = { typedField = 0 })
                 WheelLabel("h")
-                WheelPicker(range = 0..59, value = minutes, onValue = { minutes = it })
+                WheelPicker(range = 0..59, value = minutes, onValue = { minutes = it }, onTap = { typedField = 1 })
                 WheelLabel("m")
-                WheelPicker(range = 0..59, value = seconds, onValue = { seconds = it })
+                WheelPicker(range = 0..59, value = seconds, onValue = { seconds = it }, onTap = { typedField = 2 })
                 WheelLabel("s")
             }
+            TextButton(onClick = { typedField = 0 }) { Text("Type a duration") }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(1L, 5L, 10L, 25L).forEach { m ->
@@ -572,6 +596,7 @@ private fun WheelPicker(
     value: Int,
     onValue: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    onTap: (() -> Unit)? = null,
 ) {
     val count = range.count()
     val itemHeight = 48.dp
@@ -594,7 +619,15 @@ private fun WheelPicker(
     Box(
         modifier = modifier
             .width(64.dp)
-            .height(itemHeight * 3),
+            .height(itemHeight * 3)
+            .then(
+                if (onTap == null) {
+                    Modifier
+                } else {
+                    // Tap (not scroll) switches this field to typed entry.
+                    Modifier.pointerInput(onTap) { detectTapGestures(onTap = { onTap() }) }
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -634,4 +667,130 @@ private fun WheelPicker(
             }
         }
     }
+}
+
+/**
+ * Typed duration entry (§Module 4): three number fields with a digits-only
+ * keyboard. Entering two digits (or a value that can't grow, e.g. "6" minutes)
+ * hops straight to the field on the right, Samsung-style.
+ */
+@Composable
+private fun TypedDuration(
+    hours: Int,
+    minutes: Int,
+    seconds: Int,
+    startField: Int,
+    onHours: (Int) -> Unit,
+    onMinutes: (Int) -> Unit,
+    onSeconds: (Int) -> Unit,
+    onDone: () -> Unit,
+) {
+    var hourText by remember { mutableStateOf(if (hours == 0) "" else hours.toString()) }
+    var minuteText by remember { mutableStateOf(if (minutes == 0) "" else minutes.toString()) }
+    var secondText by remember { mutableStateOf(if (seconds == 0) "" else seconds.toString()) }
+
+    val hourFocus = remember { FocusRequester() }
+    val minuteFocus = remember { FocusRequester() }
+    val secondFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(startField) {
+        when (startField) {
+            0 -> hourFocus.requestFocus()
+            1 -> minuteFocus.requestFocus()
+            else -> secondFocus.requestFocus()
+        }
+    }
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            DurationField(
+                value = hourText,
+                focusRequester = hourFocus,
+                max = 99,
+                onValue = { text, full ->
+                    hourText = text
+                    onHours(text.toIntOrNull() ?: 0)
+                    if (full) minuteFocus.requestFocus()
+                },
+            )
+            WheelLabel("h")
+            DurationField(
+                value = minuteText,
+                focusRequester = minuteFocus,
+                max = 59,
+                onValue = { text, full ->
+                    minuteText = text
+                    onMinutes(text.toIntOrNull() ?: 0)
+                    if (full) secondFocus.requestFocus()
+                },
+            )
+            WheelLabel("m")
+            DurationField(
+                value = secondText,
+                focusRequester = secondFocus,
+                max = 59,
+                onValue = { text, full ->
+                    secondText = text
+                    onSeconds(text.toIntOrNull() ?: 0)
+                    if (full) keyboard?.hide()
+                },
+            )
+            WheelLabel("s")
+        }
+        TextButton(
+            onClick = {
+                keyboard?.hide()
+                onDone()
+            },
+        ) { Text("Use the wheels") }
+    }
+}
+
+/** One h/m/s box: digits only, at most two of them, clamped to [max]. */
+@Composable
+private fun DurationField(
+    value: String,
+    focusRequester: FocusRequester,
+    max: Int,
+    onValue: (String, Boolean) -> Unit,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { raw ->
+            val digits = raw.filter { it.isDigit() }.takeLast(2)
+            val number = digits.toIntOrNull()
+            when {
+                digits.isEmpty() -> onValue("", false)
+                number == null -> Unit
+                number > max -> onValue(max.toString(), true)
+                // Two digits typed, or a first digit that can no longer grow.
+                digits.length == 2 || number * 10 > max -> onValue(digits, true)
+                else -> onValue(digits, false)
+            }
+        },
+        modifier = Modifier.width(76.dp).focusRequester(focusRequester),
+        textStyle = LocalTextStyle.current.copy(
+            fontFamily = FontFamily.Monospace,
+            fontSize = 26.sp,
+            textAlign = TextAlign.Center,
+        ),
+        placeholder = {
+            Text(
+                "00",
+                fontFamily = FontFamily.Monospace,
+                fontSize = 26.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+    )
 }

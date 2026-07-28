@@ -66,4 +66,27 @@ interface SettingsRepository {
     val screenTimeRebuilt: Flow<Boolean>
 
     suspend fun setScreenTimeRebuilt(done: Boolean)
+
+    /**
+     * Defaults applied to pastes created from the Android share sheet
+     * (§Module Pastebin): "EXPIRY|VISIBILITY|burn|password".
+     */
+    val pastebinShareDefaults: Flow<String>
+
+    suspend fun setPastebinShareDefaults(value: String)
+
+    /** Pastebin account user key, minted from username/password once. */
+    val pastebinUserKey: Flow<String>
+
+    suspend fun setPastebinUserKey(key: String)
+
+    /** Saved Clear Sky observing spots, one "name~lat~lon" per line. */
+    val clearSkyPlaces: Flow<String>
+
+    suspend fun setClearSkyPlaces(value: String)
+
+    /** The Clear Sky place shown on open ("name~lat~lon"); empty = ask. */
+    val clearSkyLastPlace: Flow<String>
+
+    suspend fun setClearSkyLastPlace(value: String)
 }

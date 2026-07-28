@@ -25,14 +25,8 @@ data class DayBar(val date: String, val label: String, val totalMs: Long, val un
 
 data class AppLine(val label: String, val packageName: String, val ms: Long)
 
-/** One day drilled into: its own apps, unlocks and total. */
-data class DayDetail(
-    val date: String,
-    val label: String,
-    val totalMs: Long,
-    val unlocks: Int,
-    val apps: List<AppLine>,
-)
+/** Export shapes offered by the download dialog. */
+enum class ExportFormat { JSON, CSV_DAYS, CSV_APPS }
 
 data class ScreenTimeUiState(
     val hasPermission: Boolean = false,
@@ -45,8 +39,15 @@ data class ScreenTimeUiState(
     val weekTotalMs: Long = 0,
     val topApps: List<AppLine> = emptyList(),
     val totalDaysStored: Int = 0,
-    /** Non-null while a single day is open. */
-    val dayDetail: DayDetail? = null,
+    /**
+     * Selected day (yyyy-MM-dd) or null for the whole week. When set, the stat
+     * cards and the app list describe that day only and the other bars dim —
+     * the iOS-style inline drill-down instead of a popup.
+     */
+    val selectedDate: String? = null,
+    val selectedLabel: String = "",
+    val showExportDialog: Boolean = false,
+    val exportMessage: String? = null,
 )
 
 @HiltViewModel
@@ -86,26 +87,68 @@ class ScreenTimeViewModel @Inject constructor(
         }
     }
 
-    /** Opens the per-day breakdown for [date] (yyyy-MM-dd). */
-    fun openDay(date: String) {
+    /** Selects a day inline, or clears the selection when tapping it again. */
+    fun selectDay(date: String) {
+        if (_uiState.value.selectedDate == date) {
+            clearSelection()
+            return
+        }
         viewModelScope.launch {
-            val day = dao.day(date)
             val apps = dao.appsOn(date).map { AppLine(it.label, it.packageName, it.foregroundMs) }
             val parsed = runCatching { dateFormat.parse(date) }.getOrNull()
             _uiState.value = _uiState.value.copy(
-                dayDetail = DayDetail(
-                    date = date,
-                    label = parsed?.let { dayTitleFormat.format(it) } ?: date,
-                    totalMs = day?.totalForegroundMs ?: 0L,
-                    unlocks = day?.unlocks ?: 0,
-                    apps = apps,
-                ),
+                selectedDate = date,
+                selectedLabel = parsed?.let { dayTitleFormat.format(it) } ?: date,
+                topApps = apps.take(20),
             )
         }
     }
 
-    fun closeDay() {
-        _uiState.value = _uiState.value.copy(dayDetail = null)
+    fun clearSelection() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(selectedDate = null, selectedLabel = "")
+            loadWeek(_uiState.value.weekOffset)
+        }
+    }
+
+    fun showExportDialog() { _uiState.value = _uiState.value.copy(showExportDialog = true) }
+    fun dismissExportDialog() { _uiState.value = _uiState.value.copy(showExportDialog = false) }
+    fun dismissExportMessage() { _uiState.value = _uiState.value.copy(exportMessage = null) }
+
+    /** Builds the requested export body; the screen writes it to Downloads. */
+    suspend fun buildExport(format: ExportFormat, weekOnly: Boolean): Pair<String, String> {
+        val days = if (weekOnly) {
+            val keys = _uiState.value.days.map { it.date }.toSet()
+            dao.allDays().filter { it.date in keys }
+        } else {
+            dao.allDays()
+        }
+        val dayKeys = days.map { it.date }.toSet()
+        val apps = dao.allApps().filter { it.date in dayKeys }
+        val suffix = if (weekOnly) "week" else "all"
+        return when (format) {
+            ExportFormat.JSON -> "lifeos-screentime-$suffix.json" to exportJson(days, apps)
+            ExportFormat.CSV_DAYS -> "lifeos-screentime-days-$suffix.csv" to buildString {
+                appendLine("date,screen_time_minutes,unlocks,notifications")
+                days.sortedBy { it.date }.forEach {
+                    appendLine("${it.date},${it.totalForegroundMs / 60_000},${it.unlocks},${it.notifications}")
+                }
+            }
+            ExportFormat.CSV_APPS -> "lifeos-screentime-apps-$suffix.csv" to buildString {
+                appendLine("date,app,package,minutes")
+                apps.sortedWith(compareBy({ it.date }, { -it.foregroundMs })).forEach {
+                    val label = it.label.replace(",", " ")
+                    appendLine("${it.date},$label,${it.packageName},${it.foregroundMs / 60_000}")
+                }
+            }
+        }
+    }
+
+    fun onExported(fileName: String?) {
+        _uiState.value = _uiState.value.copy(
+            showExportDialog = false,
+            exportMessage = fileName?.let { "Saved $it to Downloads" } ?: "Export failed",
+        )
     }
 
     fun previousWeek() { loadWeekAsync(_uiState.value.weekOffset + 1) }
@@ -153,10 +196,12 @@ class ScreenTimeViewModel @Inject constructor(
         )
     }
 
-    /** Full export of every stored day + per-app row, as JSON. */
-    suspend fun exportJson(): String {
-        val days = dao.allDays()
-        val apps = dao.allApps().groupBy { it.date }
+    /** JSON body for the given rows. */
+    private fun exportJson(
+        days: List<ScreenTimeDayEntity>,
+        appRows: List<AppUsageEntity>,
+    ): String {
+        val apps = appRows.groupBy { it.date }
         val json = Json { prettyPrint = true }
         val array = JsonArray(
             days.map { day ->

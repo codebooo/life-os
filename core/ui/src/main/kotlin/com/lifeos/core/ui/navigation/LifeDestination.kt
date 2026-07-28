@@ -91,6 +91,12 @@ sealed interface LifeDestination {
 
     @Serializable
     data object Brick : LifeDestination
+
+    @Serializable
+    data object Pastebin : LifeDestination
+
+    @Serializable
+    data object ClearSky : LifeDestination
 }
 
 const val DEEP_LINK_SCHEME = "lifeos"

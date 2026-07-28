@@ -34,7 +34,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,11 +64,43 @@ fun ScreenTimeRoute(viewModel: ScreenTimeViewModel = hiltViewModel()) {
 
     LaunchedEffect(Unit) { viewModel.refresh() }
 
-    state.dayDetail?.let { detail ->
-        DayDetailSheet(detail = detail, onDismiss = viewModel::closeDay)
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(state.exportMessage) {
+        state.exportMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.dismissExportMessage()
+        }
+    }
+
+    if (state.showExportDialog) {
+        ExportDialog(
+            onDismiss = viewModel::dismissExportDialog,
+            onExport = { format, weekOnly ->
+                scope.launch {
+                    val saved = runCatching {
+                        val (name, body) = viewModel.buildExport(format, weekOnly)
+                        val resolver = context.contentResolver
+                        val values = ContentValues().apply {
+                            put(MediaStore.Downloads.DISPLAY_NAME, name)
+                            put(
+                                MediaStore.Downloads.MIME_TYPE,
+                                if (name.endsWith(".json")) "application/json" else "text/csv",
+                            )
+                        }
+                        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                            ?: error("MediaStore rejected the file")
+                        resolver.openOutputStream(uri)?.use { it.write(body.toByteArray()) }
+                            ?: error("Could not open the file")
+                        name
+                    }.getOrNull()
+                    viewModel.onExported(saved)
+                }
+            },
+        )
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Screen Time") },
@@ -72,19 +108,9 @@ fun ScreenTimeRoute(viewModel: ScreenTimeViewModel = hiltViewModel()) {
                     IconButton(onClick = { viewModel.refresh() }) {
                         Icon(Icons.Filled.Refresh, contentDescription = "Sync")
                     }
-                    IconButton(onClick = {
-                        scope.launch {
-                            val json = viewModel.exportJson()
-                            val resolver = context.contentResolver
-                            val values = ContentValues().apply {
-                                put(MediaStore.Downloads.DISPLAY_NAME, "lifeos-screentime.json")
-                                put(MediaStore.Downloads.MIME_TYPE, "application/json")
-                            }
-                            resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)?.let { uri ->
-                                resolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) }
-                            }
-                        }
-                    }) { Icon(Icons.Filled.Download, contentDescription = "Export JSON") }
+                    IconButton(onClick = { viewModel.showExportDialog() }) {
+                        Icon(Icons.Filled.Download, contentDescription = "Export data")
+                    }
                 },
             )
         },
@@ -126,17 +152,42 @@ fun ScreenTimeRoute(viewModel: ScreenTimeViewModel = hiltViewModel()) {
                     }
                 }
             }
+            val selected = state.selectedDate?.let { date -> state.days.firstOrNull { it.date == date } }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatCard("Daily average", formatDuration(state.dailyAverageMs), Modifier.weight(1f))
-                    StatCard("Week total", formatDuration(state.weekTotalMs), Modifier.weight(1f))
+                    if (selected != null) {
+                        StatCard("Screen time", formatDuration(selected.totalMs), Modifier.weight(1f))
+                        StatCard("Unlocks", selected.unlocks.toString(), Modifier.weight(1f))
+                    } else {
+                        StatCard("Daily average", formatDuration(state.dailyAverageMs), Modifier.weight(1f))
+                        StatCard("Week total", formatDuration(state.weekTotalMs), Modifier.weight(1f))
+                    }
                 }
             }
-            item { WeekBars(state.days) { date -> viewModel.openDay(date) } }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    StatCard("Unlocks", state.days.sumOf { it.unlocks }.toString(), Modifier.weight(1f))
-                    StatCard("Notifications", state.days.sumOf { it.notifications }.toString(), Modifier.weight(1f))
+                WeekBars(
+                    days = state.days,
+                    selectedDate = state.selectedDate,
+                    onDayClick = { date -> viewModel.selectDay(date) },
+                )
+            }
+            item {
+                if (selected != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(state.selectedLabel, style = MaterialTheme.typography.titleMedium)
+                        androidx.compose.material3.TextButton(onClick = { viewModel.clearSelection() }) {
+                            Text("Show week")
+                        }
+                    }
+                } else {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        StatCard("Unlocks", state.days.sumOf { it.unlocks }.toString(), Modifier.weight(1f))
+                        StatCard("Notifications", state.days.sumOf { it.notifications }.toString(), Modifier.weight(1f))
+                    }
                 }
             }
             if (state.topApps.isEmpty()) {
@@ -147,7 +198,12 @@ fun ScreenTimeRoute(viewModel: ScreenTimeViewModel = hiltViewModel()) {
                     )
                 }
             } else {
-                item { Text("Most used apps", style = MaterialTheme.typography.titleMedium) }
+                item {
+                    Text(
+                        if (state.selectedDate != null) "Apps used that day" else "Most used apps",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                }
                 items(state.topApps, key = { it.packageName }) { app ->
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
@@ -160,7 +216,7 @@ fun ScreenTimeRoute(viewModel: ScreenTimeViewModel = hiltViewModel()) {
             }
             item {
                 Text(
-                    "Tap a bar for that day's apps and unlocks · ${state.totalDaysStored} day(s) stored permanently in LifeOS.",
+                    "Tap a bar to focus that day · ${state.totalDaysStored} day(s) stored permanently in LifeOS.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -169,43 +225,62 @@ fun ScreenTimeRoute(viewModel: ScreenTimeViewModel = hiltViewModel()) {
     }
 }
 
-/** Per-day drill-down: total, unlocks and the day's own app ranking. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** Export options (item 5): a dialog, not a slide-up, with format + range. */
 @Composable
-private fun DayDetailSheet(detail: DayDetail, onDismiss: () -> Unit) {
-    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(detail.label, style = MaterialTheme.typography.titleLarge)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                StatCard("Screen time", formatDuration(detail.totalMs), Modifier.weight(1f))
-                StatCard("Unlocks", detail.unlocks.toString(), Modifier.weight(1f))
-            }
-            if (detail.apps.isEmpty()) {
-                Text(
-                    "No app usage recorded for this day.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                Text("Apps used", style = MaterialTheme.typography.titleMedium)
-                detail.apps.take(20).forEach { app ->
+private fun ExportDialog(onDismiss: () -> Unit, onExport: (ExportFormat, Boolean) -> Unit) {
+    var format by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(ExportFormat.JSON) }
+    var weekOnly by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Export screen time") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Format", style = MaterialTheme.typography.labelLarge)
+                listOf(
+                    ExportFormat.JSON to "JSON — everything, per day and per app",
+                    ExportFormat.CSV_DAYS to "CSV — one row per day",
+                    ExportFormat.CSV_APPS to "CSV — one row per app per day",
+                ).forEach { (option, label) ->
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth().clickable { format = option },
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(app.label, maxLines = 1, modifier = Modifier.weight(1f))
-                        Text(formatDuration(app.ms), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        androidx.compose.material3.RadioButton(
+                            selected = format == option,
+                            onClick = { format = option },
+                        )
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
+                androidx.compose.material3.HorizontalDivider()
+                Text("Range", style = MaterialTheme.typography.labelLarge)
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { weekOnly = false },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    androidx.compose.material3.RadioButton(selected = !weekOnly, onClick = { weekOnly = false })
+                    Text("Everything stored", style = MaterialTheme.typography.bodyMedium)
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { weekOnly = true },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    androidx.compose.material3.RadioButton(selected = weekOnly, onClick = { weekOnly = true })
+                    Text("Shown week only", style = MaterialTheme.typography.bodyMedium)
+                }
+                Text(
+                    "Saved to your Downloads folder.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-        }
-    }
+        },
+        confirmButton = { Button(onClick = { onExport(format, weekOnly) }) { Text("Export") } },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 @Composable
@@ -219,7 +294,7 @@ private fun StatCard(label: String, value: String, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun WeekBars(days: List<DayBar>, onDayClick: (String) -> Unit) {
+private fun WeekBars(days: List<DayBar>, selectedDate: String?, onDayClick: (String) -> Unit) {
     val max = (days.maxOfOrNull { it.totalMs } ?: 0L).coerceAtLeast(1L)
     Card {
         Row(
@@ -237,14 +312,29 @@ private fun WeekBars(days: List<DayBar>, onDayClick: (String) -> Unit) {
                 ) {
                     Text(formatShort(day.totalMs), style = MaterialTheme.typography.labelSmall, maxLines = 1)
                     val fraction = (day.totalMs.toFloat() / max).coerceIn(0.02f, 1f)
+                    // iOS-style focus: the picked bar keeps full colour, the rest fade.
+                    val dimmed = selectedDate != null && selectedDate != day.date
                     Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp)) {
                         Surface(
-                            color = MaterialTheme.colorScheme.primary,
+                            color = if (dimmed) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+                            } else {
+                                MaterialTheme.colorScheme.primary
+                            },
                             shape = RoundedCornerShape(6.dp),
                             modifier = Modifier.fillMaxWidth().height((120 * fraction).dp),
                         ) {}
                     }
-                    Text(day.label, style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
+                    Text(
+                        day.label,
+                        style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.Center,
+                        color = if (selectedDate == day.date) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
                 }
             }
         }

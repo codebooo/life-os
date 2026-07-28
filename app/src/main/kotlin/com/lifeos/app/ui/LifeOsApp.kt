@@ -51,6 +51,8 @@ import com.lifeos.feature.news.NewsRoute
 import com.lifeos.feature.vault.VaultRoute
 import com.lifeos.feature.screentime.ScreenTimeRoute
 import com.lifeos.feature.brick.BrickRoute
+import com.lifeos.feature.clearsky.ClearSkyRoute
+import com.lifeos.feature.pastebin.PastebinRoute
 
 /**
  * Single-activity app shell (§1.3): adaptive scaffold, short M3E bottom bar,
@@ -193,6 +195,8 @@ fun LifeOsApp(captureRequests: Int = 0, navBarIds: List<String> = emptyList()) {
             composable<LifeDestination.Vault> { VaultRoute() }
             composable<LifeDestination.ScreenTime> { ScreenTimeRoute() }
             composable<LifeDestination.Brick> { BrickRoute() }
+            composable<LifeDestination.Pastebin> { PastebinRoute() }
+            composable<LifeDestination.ClearSky> { ClearSkyRoute() }
         }
     }
 

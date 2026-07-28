@@ -37,6 +37,10 @@ data class CalendarUiState(
     val editorDurationMinutes: String = "60",
     val editorAllDay: Boolean = false,
     val editorRemind: Boolean = true,
+    /** Ladder granularity in minutes (5, 10, 15, 30, 60) — pinch to change. */
+    val minutesPerStep: Int = 60,
+    /** Height of one hour in dp; shrinks for the compressed overview. */
+    val hourHeightDp: Float = 56f,
     val showConnections: Boolean = false,
     val protonUrlDraft: String = "",
     val syncing: Boolean = false,
@@ -51,6 +55,19 @@ sealed interface CalendarUiEvent {
     data class SelectDay(val dayStart: Long) : CalendarUiEvent
     /** Opens the editor pre-filled for [dayStart] at [hour] (timeline tap / FAB). */
     data class NewEventAt(val dayStart: Long, val hour: Int) : CalendarUiEvent
+
+    /**
+     * Drag-to-create (Google-Calendar style): the dragged window becomes the
+     * event's start minute and duration, snapped by the visible ladder.
+     */
+    data class NewEventForRange(
+        val dayStart: Long,
+        val startMinuteOfDay: Int,
+        val durationMinutes: Int,
+    ) : CalendarUiEvent
+
+    /** Pinch zoom: minutes represented by one ladder step (5..60). */
+    data class SetZoom(val minutesPerStep: Int, val hourHeightDp: Float) : CalendarUiEvent
     data object ToggleEditor : CalendarUiEvent
     data class EditEvent(val event: CalendarEventEntity) : CalendarUiEvent
     data class EditorTitleChanged(val value: String) : CalendarUiEvent
@@ -120,6 +137,27 @@ class CalendarViewModel @Inject constructor(
                 window.value = windowFor(uiState.value.viewMode, anchor)
             }
             is CalendarUiEvent.SelectDay -> updateState { it.copy(selectedDay = event.dayStart) }
+            is CalendarUiEvent.SetZoom -> updateState {
+                it.copy(
+                    minutesPerStep = event.minutesPerStep.coerceIn(5, 60),
+                    hourHeightDp = event.hourHeightDp.coerceIn(24f, 220f),
+                )
+            }
+            is CalendarUiEvent.NewEventForRange -> updateState {
+                it.copy(
+                    selectedDay = event.dayStart,
+                    showEditor = true,
+                    editingEventId = null,
+                    editorTitle = "",
+                    editorLocation = "",
+                    editorNotes = "",
+                    editorHour = (event.startMinuteOfDay / 60).toString(),
+                    editorMinute = (event.startMinuteOfDay % 60).toString(),
+                    editorDurationMinutes = event.durationMinutes.coerceAtLeast(5).toString(),
+                    editorAllDay = false,
+                    editorRemind = true,
+                )
+            }
             is CalendarUiEvent.NewEventAt -> updateState {
                 it.copy(
                     selectedDay = event.dayStart,

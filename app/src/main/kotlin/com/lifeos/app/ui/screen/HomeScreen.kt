@@ -10,6 +10,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.automirrored.filled.Note
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -210,6 +212,18 @@ fun HomeScreen(
             description = "Digital wellbeing, kept forever",
             icon = Icons.Filled.Timelapse,
             destination = LifeDestination.ScreenTime,
+        ),
+        AppGridItem(
+            label = "Pastebin",
+            description = "Create, share and manage pastes",
+            icon = Icons.Filled.ContentPaste,
+            destination = LifeDestination.Pastebin,
+        ),
+        AppGridItem(
+            label = "Clear Sky Map",
+            description = "Stargazing forecast for any spot",
+            icon = Icons.Filled.NightsStay,
+            destination = LifeDestination.ClearSky,
         ),
     )
 

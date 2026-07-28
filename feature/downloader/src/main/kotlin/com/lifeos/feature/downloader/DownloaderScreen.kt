@@ -2,6 +2,7 @@ package com.lifeos.feature.downloader
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,6 +42,8 @@ import com.lifeos.core.designsystem.component.EmptyState
 import com.lifeos.feature.downloader.data.DownloadEngine
 import com.lifeos.feature.downloader.data.MediaCandidate
 import com.lifeos.feature.downloader.data.MediaExtractor
+import com.lifeos.feature.downloader.data.SiteCatalog
+import com.lifeos.feature.downloader.data.SupportedSite
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -95,6 +99,16 @@ class DownloaderViewModel @Inject constructor(
     fun delete(id: Long) {
         viewModelScope.launch { downloadDao.delete(id) }
     }
+
+    private val _sourceQuery = MutableStateFlow("")
+    val sourceQuery = _sourceQuery.asStateFlow()
+    private val _showSources = MutableStateFlow(false)
+    val showSources = _showSources.asStateFlow()
+
+    fun onSourceQuery(value: String) { _sourceQuery.value = value }
+    fun toggleSources() { _showSources.value = !_showSources.value }
+
+    fun sources(): List<SupportedSite> = SiteCatalog.search(_sourceQuery.value)
 }
 
 /**
@@ -112,7 +126,21 @@ fun DownloaderRoute(viewModel: DownloaderViewModel = hiltViewModel()) {
     val message by viewModel.message.collectAsState()
     val context = LocalContext.current
 
-    Scaffold(topBar = { TopAppBar(title = { Text("Downloader") }) }) { innerPadding ->
+    val showSources by viewModel.showSources.collectAsState()
+    val sourceQuery by viewModel.sourceQuery.collectAsState()
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Downloader") },
+                actions = {
+                    IconButton(onClick = viewModel::toggleSources) {
+                        Icon(Icons.Filled.Public, contentDescription = "Supported sites")
+                    }
+                },
+            )
+        },
+    ) { innerPadding ->
         Column(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
@@ -140,6 +168,32 @@ fun DownloaderRoute(viewModel: DownloaderViewModel = hiltViewModel()) {
             }
 
             LazyColumn(modifier = Modifier.fillMaxSize()) {
+                if (showSources) {
+                    item {
+                        OutlinedTextField(
+                            value = sourceQuery,
+                            onValueChange = viewModel::onSourceQuery,
+                            label = { Text("Search ${SiteCatalog.sites.size} supported sites") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                        )
+                    }
+                    val matches = viewModel.sources()
+                    SiteCatalog.categories.forEach { category ->
+                        val inCategory = matches.filter { it.category == category }
+                        if (inCategory.isEmpty()) return@forEach
+                        item(key = "cat-$category") {
+                            Text(
+                                category,
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                            )
+                        }
+                        items(inCategory, key = { "site-${it.host}-${it.name}" }) { site ->
+                            SiteRow(site) { viewModel.onUrl("https://${it.host}/") }
+                        }
+                    }
+                }
                 items(candidates, key = { it.url }) { candidate ->
                     ListItem(
                         headlineContent = { Text(candidate.title, maxLines = 1) },
@@ -202,16 +256,27 @@ fun DownloaderRoute(viewModel: DownloaderViewModel = hiltViewModel()) {
                         }
                     }
                 }
-                if (candidates.isEmpty() && downloads.isEmpty()) {
+                if (candidates.isEmpty() && downloads.isEmpty() && !showSources) {
                     item {
                         EmptyState(
                             title = "Nothing here yet",
-                            description = "Paste a link from YouTube, Vimeo, TikTok, X, Instagram or any page " +
-                                "with media — LifeOS finds the stream on-device and saves it to Downloads.",
+                            description = "Paste a link from YouTube, Vimeo, TikTok, X, Instagram, Threads, " +
+                                "LinkedIn, Reddit, ThisVid or any page with media - LifeOS finds the stream " +
+                                "on-device and saves it to Downloads. The globe icon lists every supported site.",
                         )
                     }
                 }
             }
         }
     }
+}
+
+/** One catalogue row: tapping it seeds the URL field with that site. */
+@Composable
+private fun SiteRow(site: SupportedSite, onPick: (SupportedSite) -> Unit) {
+    ListItem(
+        modifier = Modifier.clickable { onPick(site) },
+        headlineContent = { Text(site.name) },
+        supportingContent = { Text("${site.host} - ${site.note}", maxLines = 2) },
+    )
 }
