@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lifeos.core.designsystem.component.EmptyState
+import com.lifeos.core.designsystem.component.FadeThrough
 import kotlinx.coroutines.launch
 
 /**
@@ -154,13 +155,17 @@ fun ScreenTimeRoute(viewModel: ScreenTimeViewModel = hiltViewModel()) {
             }
             val selected = state.selectedDate?.let { date -> state.days.firstOrNull { it.date == date } }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (selected != null) {
-                        StatCard("Screen time", formatDuration(selected.totalMs), Modifier.weight(1f))
-                        StatCard("Unlocks", selected.unlocks.toString(), Modifier.weight(1f))
-                    } else {
-                        StatCard("Daily average", formatDuration(state.dailyAverageMs), Modifier.weight(1f))
-                        StatCard("Week total", formatDuration(state.weekTotalMs), Modifier.weight(1f))
+                // Week totals and the tapped day's numbers cross-fade into each other.
+                FadeThrough(targetState = state.selectedDate, label = "screentime-stats") { date ->
+                    val day = date?.let { value -> state.days.firstOrNull { it.date == value } }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        if (day != null) {
+                            StatCard("Screen time", formatDuration(day.totalMs), Modifier.weight(1f))
+                            StatCard("Unlocks", day.unlocks.toString(), Modifier.weight(1f))
+                        } else {
+                            StatCard("Daily average", formatDuration(state.dailyAverageMs), Modifier.weight(1f))
+                            StatCard("Week total", formatDuration(state.weekTotalMs), Modifier.weight(1f))
+                        }
                     }
                 }
             }
@@ -172,7 +177,8 @@ fun ScreenTimeRoute(viewModel: ScreenTimeViewModel = hiltViewModel()) {
                 )
             }
             item {
-                if (selected != null) {
+                FadeThrough(targetState = selected != null, label = "screentime-day-header") { hasSelection ->
+                if (hasSelection) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -188,6 +194,7 @@ fun ScreenTimeRoute(viewModel: ScreenTimeViewModel = hiltViewModel()) {
                         StatCard("Unlocks", state.days.sumOf { it.unlocks }.toString(), Modifier.weight(1f))
                         StatCard("Notifications", state.days.sumOf { it.notifications }.toString(), Modifier.weight(1f))
                     }
+                }
                 }
             }
             if (state.topApps.isEmpty()) {

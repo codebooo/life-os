@@ -26,6 +26,10 @@ import com.lifeos.app.ui.screen.InboxTabScreen
 import com.lifeos.app.ui.screen.TasksTabScreen
 import com.lifeos.app.ui.settings.SettingsRoute
 import com.lifeos.core.ui.navigation.LifeDestination
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import com.lifeos.core.designsystem.component.LifeMotion
 import com.lifeos.core.ui.navigation.TopLevelDestination
 import com.lifeos.feature.adhd.FocusRoute
 import com.lifeos.feature.agentic.MacrosRoute
@@ -135,23 +139,16 @@ fun LifeOsApp(captureRequests: Int = 0, navBarIds: List<String> = emptyList()) {
             navController = navController,
             startDestination = LifeDestination.Home,
             modifier = Modifier.padding(innerPadding),
-            // Gentle shared-axis feel (§7 motion): quick fade + small vertical lift.
+            // One motion vocabulary (§7): screens fade through each other with a
+            // barely-there scale, nothing slides or bounces.
             enterTransition = {
-                androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) +
-                    androidx.compose.animation.slideInVertically(
-                        animationSpec = androidx.compose.animation.core.tween(220),
-                        initialOffsetY = { it / 24 },
-                    )
+                fadeIn(LifeMotion.enterSpec()) + scaleIn(LifeMotion.enterSpec(), initialScale = 0.98f)
             },
-            exitTransition = { androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(140)) },
-            popEnterTransition = { androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(220)) },
-            popExitTransition = {
-                androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(140)) +
-                    androidx.compose.animation.slideOutVertically(
-                        animationSpec = androidx.compose.animation.core.tween(140),
-                        targetOffsetY = { it / 24 },
-                    )
+            exitTransition = { fadeOut(LifeMotion.exitSpec()) },
+            popEnterTransition = {
+                fadeIn(LifeMotion.enterSpec()) + scaleIn(LifeMotion.enterSpec(), initialScale = 1.01f)
             },
+            popExitTransition = { fadeOut(LifeMotion.exitSpec()) },
         ) {
             composable<LifeDestination.Home> {
                 HomeScreen(onNavigate = { navController.navigate(it) })

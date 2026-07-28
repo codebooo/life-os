@@ -49,6 +49,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import com.lifeos.core.designsystem.component.smoothSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
@@ -354,7 +355,7 @@ private fun ReorderableTileGrid(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(if (listLayout) 8.dp else 12.dp),
-        modifier = Modifier.pointerInput(listLayout) {
+        modifier = Modifier.smoothSize().pointerInput(listLayout) {
             detectDragGesturesAfterLongPress(
                 onDragStart = { position ->
                     itemAt(position)?.let { info ->

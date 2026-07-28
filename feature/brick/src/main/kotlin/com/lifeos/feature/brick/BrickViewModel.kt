@@ -35,6 +35,11 @@ data class ProfileDraft(
     val startMinuteOfDay: Int? = null,
     val endMinuteOfDay: Int? = null,
     val strict: Boolean = false,
+    /** Inverse mode: the schedule is the blocked window, taps buy access. */
+    val inverse: Boolean = false,
+    val unlockMinutes: Int = 60,
+    /** Unlocks per window run; 0 = unlimited. */
+    val unlockAllowance: Int = 1,
 )
 
 @HiltViewModel
@@ -118,6 +123,9 @@ class BrickViewModel @Inject constructor(
                 startMinuteOfDay = profile.startMinuteOfDay,
                 endMinuteOfDay = profile.endMinuteOfDay,
                 strict = profile.strict,
+                inverse = profile.inverse,
+                unlockMinutes = profile.unlockMinutes,
+                unlockAllowance = profile.unlockAllowance,
             )
         }
     }
@@ -169,15 +177,29 @@ class BrickViewModel @Inject constructor(
             _message.value = "Give the mode a name and pick at least one app"
             return
         }
-        if (draft.activator == "NFC" && draft.nfcTagId == null) {
+        if (draft.inverse) {
+            if (draft.nfcTagId == null) {
+                _message.value = "Inverse mode needs a paired tag — that tap is the only way in"
+                return
+            }
+            if (draft.startMinuteOfDay == null || draft.endMinuteOfDay == null) {
+                _message.value = "Set the window this mode blocks (start and end)"
+                return
+            }
+            if (draft.unlockMinutes < 1) {
+                _message.value = "An unlock has to last at least a minute"
+                return
+            }
+        }
+        if (!draft.inverse && draft.activator == "NFC" && draft.nfcTagId == null) {
             _message.value = "Pair an NFC tag first, or pick another activator"
             return
         }
-        if (draft.activator == "TIME" && draft.startMinuteOfDay == null) {
+        if (!draft.inverse && draft.activator == "TIME" && draft.startMinuteOfDay == null) {
             _message.value = "Set a start time"
             return
         }
-        if (draft.deactivator == "TIME" && draft.endMinuteOfDay == null) {
+        if (!draft.inverse && draft.deactivator == "TIME" && draft.endMinuteOfDay == null) {
             _message.value = "Set an end time"
             return
         }
@@ -187,12 +209,17 @@ class BrickViewModel @Inject constructor(
                     id = draft.id,
                     name = draft.name.trim(),
                     blockedPackages = draft.blocked.joinToString("\n"),
-                    activator = draft.activator,
-                    deactivator = draft.deactivator,
+                    // Inverse modes are schedule-driven on both edges; the tag
+                    // unlocks inside the window rather than ending the mode.
+                    activator = if (draft.inverse) "TIME" else draft.activator,
+                    deactivator = if (draft.inverse) "TIME" else draft.deactivator,
                     nfcTagId = draft.nfcTagId,
                     startMinuteOfDay = draft.startMinuteOfDay,
                     endMinuteOfDay = draft.endMinuteOfDay,
                     strict = draft.strict,
+                    inverse = draft.inverse,
+                    unlockMinutes = draft.unlockMinutes,
+                    unlockAllowance = draft.unlockAllowance,
                     createdAt = System.currentTimeMillis(),
                 ),
                 limits = draft.limits,
