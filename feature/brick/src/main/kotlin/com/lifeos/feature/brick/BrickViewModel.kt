@@ -135,9 +135,21 @@ class BrickViewModel @Inject constructor(
 
     /** Called by the screen when a tag is read while the editor is pairing. */
     fun onTagPaired(tagId: String) {
+        val normalized = tagId.trim().uppercase()
         _pairingTag.value = false
-        updateDraft { it.copy(nfcTagId = tagId, activator = "NFC", deactivator = "NFC") }
-        _message.value = "Tag paired"
+        updateDraft { it.copy(nfcTagId = normalized, activator = "NFC", deactivator = "NFC") }
+        _message.value = "Tag $normalized paired — remember to Save"
+    }
+
+    /**
+     * A tag tapped while Brick is open (reader mode, not intent dispatch).
+     * Flips the matching mode exactly like a tap from outside the app.
+     */
+    fun onTagTapped(tagId: String) {
+        viewModelScope.launch {
+            brickRepository.refresh()
+            _message.value = brickRepository.onTagScanned(tagId)
+        }
     }
 
     fun saveDraft() {

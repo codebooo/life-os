@@ -58,4 +58,12 @@ interface SettingsRepository {
     val publicFolderMirror: Flow<Boolean>
 
     suspend fun setPublicFolderMirror(enabled: Boolean)
+
+    /**
+     * Whether screen-time rows have been rebuilt with the event-based
+     * calculation (the first implementation stored inflated bucket totals).
+     */
+    val screenTimeRebuilt: Flow<Boolean>
+
+    suspend fun setScreenTimeRebuilt(done: Boolean)
 }

@@ -82,7 +82,7 @@ interface BrickDao {
     @Query("SELECT * FROM brick_profiles WHERE id = :id")
     suspend fun profile(id: Long): BrickProfileEntity?
 
-    @Query("SELECT * FROM brick_profiles WHERE nfcTagId = :tagId LIMIT 1")
+    @Query("SELECT * FROM brick_profiles WHERE UPPER(TRIM(nfcTagId)) = UPPER(TRIM(:tagId)) LIMIT 1")
     suspend fun profileByTag(tagId: String): BrickProfileEntity?
 
     @Query("DELETE FROM brick_profiles WHERE id = :id")

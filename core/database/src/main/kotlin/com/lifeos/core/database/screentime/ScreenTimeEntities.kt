@@ -53,4 +53,17 @@ interface ScreenTimeDao {
 
     @Query("SELECT date FROM screen_time_days")
     suspend fun capturedDates(): List<String>
+
+    @Query("SELECT * FROM screen_time_days WHERE date = :date")
+    suspend fun day(date: String): ScreenTimeDayEntity?
+
+    @Query("SELECT * FROM screen_time_apps WHERE date = :date ORDER BY foregroundMs DESC")
+    suspend fun appsOn(date: String): List<AppUsageEntity>
+
+    /** Wipes derived rows so they can be rebuilt (used by the v2 recompute). */
+    @Query("DELETE FROM screen_time_days")
+    suspend fun deleteAllDays()
+
+    @Query("DELETE FROM screen_time_apps")
+    suspend fun deleteAllApps()
 }

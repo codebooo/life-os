@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Intent
 import android.provider.MediaStore
 import android.provider.Settings
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -58,6 +59,10 @@ fun ScreenTimeRoute(viewModel: ScreenTimeViewModel = hiltViewModel()) {
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) { viewModel.refresh() }
+
+    state.dayDetail?.let { detail ->
+        DayDetailSheet(detail = detail, onDismiss = viewModel::closeDay)
+    }
 
     Scaffold(
         topBar = {
@@ -127,7 +132,7 @@ fun ScreenTimeRoute(viewModel: ScreenTimeViewModel = hiltViewModel()) {
                     StatCard("Week total", formatDuration(state.weekTotalMs), Modifier.weight(1f))
                 }
             }
-            item { WeekBars(state.days) }
+            item { WeekBars(state.days) { date -> viewModel.openDay(date) } }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     StatCard("Unlocks", state.days.sumOf { it.unlocks }.toString(), Modifier.weight(1f))
@@ -155,10 +160,49 @@ fun ScreenTimeRoute(viewModel: ScreenTimeViewModel = hiltViewModel()) {
             }
             item {
                 Text(
-                    "${state.totalDaysStored} day(s) stored permanently in LifeOS.",
+                    "Tap a bar for that day's apps and unlocks · ${state.totalDaysStored} day(s) stored permanently in LifeOS.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+    }
+}
+
+/** Per-day drill-down: total, unlocks and the day's own app ranking. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DayDetailSheet(detail: DayDetail, onDismiss: () -> Unit) {
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(detail.label, style = MaterialTheme.typography.titleLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatCard("Screen time", formatDuration(detail.totalMs), Modifier.weight(1f))
+                StatCard("Unlocks", detail.unlocks.toString(), Modifier.weight(1f))
+            }
+            if (detail.apps.isEmpty()) {
+                Text(
+                    "No app usage recorded for this day.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            } else {
+                Text("Apps used", style = MaterialTheme.typography.titleMedium)
+                detail.apps.take(20).forEach { app ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(app.label, maxLines = 1, modifier = Modifier.weight(1f))
+                        Text(formatDuration(app.ms), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         }
     }
@@ -175,7 +219,7 @@ private fun StatCard(label: String, value: String, modifier: Modifier = Modifier
 }
 
 @Composable
-private fun WeekBars(days: List<DayBar>) {
+private fun WeekBars(days: List<DayBar>, onDayClick: (String) -> Unit) {
     val max = (days.maxOfOrNull { it.totalMs } ?: 0L).coerceAtLeast(1L)
     Card {
         Row(
@@ -185,7 +229,9 @@ private fun WeekBars(days: List<DayBar>) {
         ) {
             days.forEach { day ->
                 Column(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onDayClick(day.date) },
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Bottom,
                 ) {

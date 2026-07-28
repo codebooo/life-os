@@ -7,7 +7,7 @@ or on your own NAS (Ollama). No third-party cloud, ever.
 **Spec:** [`docs/PRODUCTION_PLAN.md`](docs/PRODUCTION_PLAN.md). Every module
 and rule traces back to a section (and often a community demand source) there.
 
-## Status — v0.1.0-alpha.17
+## Status — v0.1.0-alpha.18
 
 | Area | State |
 |---|---|
@@ -41,7 +41,7 @@ and rule traces back to a section (and often a community demand source) there.
 | Vault v2: dedicated screens per item — Proton-Pass-style logins (password generator, on-device TOTP 2FA, custom fields, attachments), Markdown secure texts, zoomable image gallery (downsampled, no OOM); hidden behind a 5-second hold on the Home title | ✅ |
 | Notes editor: Word-style Markdown toolbar (bold/italic/heading/list/quote/code/link on the selection), rendered⇄raw toggle + pen; optional readable mirror to /Internal storage/LifeOS/Notes/*.md (all-files access) | ✅ |
 | Focus timer: tap the ring for a custom HH:MM:SS time, plus an "Overlay" button that floats the countdown over any app (tap once for a close X that leaves it running); Overwhelm overlay now follows the theme | ✅ |
-| Screen Time: mirrors Android digital-wellbeing into LifeOS and keeps it forever (survives Samsung's ~monthly purge) — weekly bars + average, week scrolling, per-app breakdown, unlocks, JSON export | ✅ |
+| Screen Time: mirrors Android digital-wellbeing into LifeOS and keeps it forever (survives Samsung's ~monthly purge) — weekly bars + average, week scrolling, tap a day for its own apps/unlocks, JSON export. Totals are derived from the raw RESUMED/PAUSED event stream, not `queryAndAggregateUsageStats` (which reports whole-bucket sums per day) | ✅ |
 | Screen Time · Plants (custom photos + care atlas) · News · Downloader on Home; NAS server apps redesigned as an app-store list; Jarvis answers from a live data snapshot (note bodies included) and a Developer Options "Jarvis Debugging" toggle exposes snapshot/output/tool-calls with a copy button | ✅ |
 | Brick (§Module Brick): tap-to-block modes — pick blocked apps + optional per-app daily allowances, turn a mode on/off by NFC tag, time window or by hand, strict mode refuses early exits; blocked apps hit a full-screen wall via an accessibility blocker (the only route Android gives a sideloaded app). Blocking rules covered by unit tests | ✅ |
 | Deferred post-alpha: Glance home-screen widgets, HA WebSocket live state/zones, Vault unlock UI, first-run onboarding checklist (grants live in Settings → System access), FinTS bank sync | 🔜 |
@@ -53,7 +53,7 @@ and rule traces back to a section (and often a community demand source) there.
 Grab `lifeos-v*.apk` from [Releases](../../releases), then:
 
 ```
-adb install -r -g lifeos-v0.1.0-alpha.17.apk
+adb install -r -g lifeos-v0.1.0-alpha.18.apk
 ```
 
 or copy to the phone and allow *Install unknown apps*. Android 13+ (minSdk 33).

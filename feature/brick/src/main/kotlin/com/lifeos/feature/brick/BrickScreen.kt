@@ -1,7 +1,6 @@
 package com.lifeos.feature.brick
 
 import android.app.Activity
-import android.nfc.NfcAdapter
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,6 +58,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.lifeos.core.database.brick.BrickProfileEntity
 import com.lifeos.core.designsystem.component.EmptyState
+import com.lifeos.feature.brick.nfc.BrickReader
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -95,8 +95,14 @@ fun BrickRoute(viewModel: BrickViewModel = hiltViewModel()) {
         }
     }
 
-    // Foreground NFC reader while pairing a tag in the editor.
-    NfcPairingEffect(enabled = pairing, onTag = viewModel::onTagPaired)
+    // Reader mode stays on the whole time Brick is open: while pairing a tag it
+    // captures the id, otherwise a tap flips the matching mode right here.
+    // (Outside the app, the manifest's NFC filters route taps to BrickNfcActivity.)
+    BrickReaderEffect(
+        onUid = { uid ->
+            if (viewModel.pairingTag.value) viewModel.onTagPaired(uid) else viewModel.onTagTapped(uid)
+        },
+    )
 
     if (draft != null) {
         ProfileEditor(viewModel = viewModel, snackbarHostState = snackbarHostState)
@@ -297,7 +303,8 @@ private fun ProfileEditor(viewModel: BrickViewModel, snackbarHostState: Snackbar
                             }
                             Text(
                                 if (pairing) "Hold the tag against the back of the phone…"
-                                else "Any NFC tag or card works — one tap flips this mode on and off.",
+                                else "Any NFC tag or card works — one tap flips this mode on and off. " +
+                                    "Tap it here any time to test.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -466,26 +473,28 @@ private fun MinuteField(label: String, minuteOfDay: Int?, onChange: (Int?) -> Un
     }
 }
 
-/** Reader-mode NFC while the editor is pairing a tag. */
+/**
+ * Keeps NFC reader mode running while the Brick screen is on top, and stops it
+ * when the screen goes away so the system's normal tag dispatch takes over again.
+ */
 @Composable
-private fun NfcPairingEffect(enabled: Boolean, onTag: (String) -> Unit) {
+private fun BrickReaderEffect(onUid: (String) -> Unit) {
     val context = LocalContext.current
-    DisposableEffect(enabled) {
-        val activity = context as? Activity
-        val adapter = NfcAdapter.getDefaultAdapter(context)
-        if (!enabled || activity == null || adapter == null) return@DisposableEffect onDispose {}
-        val callback = NfcAdapter.ReaderCallback { tag ->
-            tag.id?.joinToString("") { "%02X".format(it) }?.takeIf { it.isNotEmpty() }?.let(onTag)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val activity = context as? Activity ?: return@DisposableEffect onDispose {}
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> BrickReader.start(activity) { uid -> onUid(uid); true }
+                Lifecycle.Event.ON_PAUSE -> BrickReader.stop(activity)
+                else -> Unit
+            }
         }
-        adapter.enableReaderMode(
-            activity,
-            callback,
-            NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or
-                NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_NFC_V or
-                NfcAdapter.FLAG_READER_SKIP_NDEF_CHECK,
-            null,
-        )
-        onDispose { runCatching { adapter.disableReaderMode(activity) } }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            BrickReader.stop(activity)
+        }
     }
 }
 
