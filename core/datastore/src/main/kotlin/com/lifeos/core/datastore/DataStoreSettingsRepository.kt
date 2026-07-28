@@ -97,6 +97,13 @@ internal class DataStoreSettingsRepository @Inject constructor(
         dataStore.edit { prefs -> prefs[KEY_JARVIS_DEBUG] = enabled }
     }
 
+    override val screenTimeRebuilt: Flow<Boolean> =
+        dataStore.data.map { prefs -> prefs[KEY_SCREEN_TIME_REBUILT] ?: false }
+
+    override suspend fun setScreenTimeRebuilt(done: Boolean) {
+        dataStore.edit { prefs -> prefs[KEY_SCREEN_TIME_REBUILT] = done }
+    }
+
     override val publicFolderMirror: Flow<Boolean> =
         dataStore.data.map { prefs -> prefs[KEY_PUBLIC_FOLDER_MIRROR] ?: false }
 
@@ -116,5 +123,6 @@ internal class DataStoreSettingsRepository @Inject constructor(
         val KEY_HOME_ORDER = stringPreferencesKey("home_order")
         val KEY_JARVIS_DEBUG = booleanPreferencesKey("jarvis_debug")
         val KEY_PUBLIC_FOLDER_MIRROR = booleanPreferencesKey("public_folder_mirror")
+        val KEY_SCREEN_TIME_REBUILT = booleanPreferencesKey("screen_time_rebuilt_v2")
     }
 }

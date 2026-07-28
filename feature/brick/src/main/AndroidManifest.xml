@@ -57,6 +57,15 @@
             <intent-filter>
                 <action android:name="android.nfc.action.TECH_DISCOVERED" />
             </intent-filter>
+            <!--
+              Last-resort filter: plain tags whose NDEF mime does not match and
+              whose tech list is unusual still land here, which is what makes an
+              arbitrary tag usable as a Brick key.
+            -->
+            <intent-filter>
+                <action android:name="android.nfc.action.TAG_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
             <meta-data
                 android:name="android.nfc.action.TECH_DISCOVERED"
                 android:resource="@xml/brick_nfc_tech" />

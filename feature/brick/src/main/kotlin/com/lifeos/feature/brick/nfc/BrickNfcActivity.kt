@@ -1,8 +1,6 @@
 package com.lifeos.feature.brick.nfc
 
 import android.content.Intent
-import android.nfc.NfcAdapter
-import android.nfc.Tag
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.compose.setContent
@@ -67,7 +65,7 @@ class BrickNfcActivity : FragmentActivity() {
     }
 
     private fun handle(intent: Intent?) {
-        val tagId = intent?.tagId()
+        val tagId = intent?.tagUid()
         if (tagId == null) {
             finish()
             return
@@ -81,9 +79,3 @@ class BrickNfcActivity : FragmentActivity() {
     }
 }
 
-/** Hex id of the scanned tag, or null when the intent carries no tag. */
-internal fun Intent.tagId(): String? {
-    @Suppress("DEPRECATION")
-    val tag = getParcelableExtra<Tag>(NfcAdapter.EXTRA_TAG) ?: return null
-    return tag.id?.joinToString("") { "%02X".format(it) }?.takeIf { it.isNotEmpty() }
-}

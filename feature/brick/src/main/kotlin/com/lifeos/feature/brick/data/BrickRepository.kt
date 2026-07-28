@@ -130,18 +130,25 @@ class BrickRepository @Inject constructor(
         return true
     }
 
-    /** NFC tap: flips the mode bound to [tagId]. Returns a message for the UI. */
-    suspend fun onTagScanned(tagId: String): String {
+    /** NFC tap: flips the mode bound to [rawTagId]. Returns a message for the UI. */
+    suspend fun onTagScanned(rawTagId: String): String {
+        // Ids are stored uppercase-hex; compare normalized so a tag paired in
+        // one code path always matches a tap arriving through another.
+        val tagId = rawTagId.trim().uppercase()
+        LifeLogger.i(TAG, "Brick tag scanned: $tagId")
         val running = _active.value
         if (running != null) {
-            return if (running.profile.nfcTagId == tagId) {
-                if (stop("NFC")) "\"${running.profile.name}\" unlocked" else "Wrong tag for this mode"
-            } else {
-                "\"${running.profile.name}\" stays locked — that's a different tag"
+            val runningTag = running.profile.nfcTagId?.trim()?.uppercase()
+            return when {
+                runningTag == tagId ->
+                    if (stop("NFC")) "\"${running.profile.name}\" unlocked" else "Wrong tag for this mode"
+                // A different tag may belong to another mode, but only one mode
+                // runs at a time — say so instead of silently doing nothing.
+                else -> "\"${running.profile.name}\" is still running; end it with its own tag first"
             }
         }
         val profile = brickDao.profileByTag(tagId)
-            ?: return "Unknown tag. Pair it with a mode in Brick first."
+            ?: return "Tag $tagId is not paired with any mode yet — pair it in Brick"
         return if (start(profile.id, "NFC")) "\"${profile.name}\" is now blocking" else "Couldn't start the mode"
     }
 

@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.lifeos.core.database.screentime.AppUsageEntity
 import com.lifeos.core.database.screentime.ScreenTimeDao
 import com.lifeos.core.database.screentime.ScreenTimeDayEntity
+import com.lifeos.core.datastore.SettingsRepository
 import com.lifeos.feature.screentime.data.ScreenTimeCollector
+import kotlinx.coroutines.flow.first
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,6 +25,15 @@ data class DayBar(val date: String, val label: String, val totalMs: Long, val un
 
 data class AppLine(val label: String, val packageName: String, val ms: Long)
 
+/** One day drilled into: its own apps, unlocks and total. */
+data class DayDetail(
+    val date: String,
+    val label: String,
+    val totalMs: Long,
+    val unlocks: Int,
+    val apps: List<AppLine>,
+)
+
 data class ScreenTimeUiState(
     val hasPermission: Boolean = false,
     val loading: Boolean = false,
@@ -34,12 +45,15 @@ data class ScreenTimeUiState(
     val weekTotalMs: Long = 0,
     val topApps: List<AppLine> = emptyList(),
     val totalDaysStored: Int = 0,
+    /** Non-null while a single day is open. */
+    val dayDetail: DayDetail? = null,
 )
 
 @HiltViewModel
 class ScreenTimeViewModel @Inject constructor(
     private val dao: ScreenTimeDao,
     private val collector: ScreenTimeCollector,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ScreenTimeUiState())
@@ -48,14 +62,50 @@ class ScreenTimeViewModel @Inject constructor(
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
     private val dayLabelFormat = SimpleDateFormat("EEE", Locale.getDefault())
     private val rangeFormat = SimpleDateFormat("d MMM", Locale.getDefault())
+    private val dayTitleFormat = SimpleDateFormat("EEEE, d MMM", Locale.getDefault())
 
     fun refresh() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(hasPermission = collector.hasPermission(), loading = true)
-            if (collector.hasPermission()) collector.sync()
+            if (collector.hasPermission()) {
+                // The first release derived totals from queryAndAggregateUsageStats,
+                // which reports whole-bucket sums per day (the "191h/day" bug).
+                // Drop those rows once and rebuild from the event stream.
+                val rebuilt = settingsRepository.screenTimeRebuilt.first()
+                if (!rebuilt) {
+                    dao.deleteAllDays()
+                    dao.deleteAllApps()
+                    collector.sync(force = true)
+                    settingsRepository.setScreenTimeRebuilt(true)
+                } else {
+                    collector.sync()
+                }
+            }
             loadWeek(_uiState.value.weekOffset)
             _uiState.value = _uiState.value.copy(loading = false)
         }
+    }
+
+    /** Opens the per-day breakdown for [date] (yyyy-MM-dd). */
+    fun openDay(date: String) {
+        viewModelScope.launch {
+            val day = dao.day(date)
+            val apps = dao.appsOn(date).map { AppLine(it.label, it.packageName, it.foregroundMs) }
+            val parsed = runCatching { dateFormat.parse(date) }.getOrNull()
+            _uiState.value = _uiState.value.copy(
+                dayDetail = DayDetail(
+                    date = date,
+                    label = parsed?.let { dayTitleFormat.format(it) } ?: date,
+                    totalMs = day?.totalForegroundMs ?: 0L,
+                    unlocks = day?.unlocks ?: 0,
+                    apps = apps,
+                ),
+            )
+        }
+    }
+
+    fun closeDay() {
+        _uiState.value = _uiState.value.copy(dayDetail = null)
     }
 
     fun previousWeek() { loadWeekAsync(_uiState.value.weekOffset + 1) }
