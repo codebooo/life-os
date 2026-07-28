@@ -38,6 +38,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -143,6 +144,12 @@ fun ClearSkyRoute(viewModel: ClearSkyViewModel = hiltViewModel()) {
                         }
                     },
                 )
+            }
+
+            if (state.loading && state.forecast != null) {
+                item {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
             }
 
             if (state.results.isNotEmpty()) {

@@ -28,6 +28,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import com.lifeos.core.designsystem.component.FadeVisible
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -163,9 +164,9 @@ fun DownloaderRoute(viewModel: DownloaderViewModel = hiltViewModel()) {
                     else Text("Scan")
                 }
             }
-            message?.let {
+            FadeVisible(visible = message != null) {
                 Text(
-                    it,
+                    message.orEmpty(),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),

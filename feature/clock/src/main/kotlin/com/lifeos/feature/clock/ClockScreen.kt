@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.lifeos.core.designsystem.component.FadeThrough
 import com.lifeos.core.designsystem.component.EmptyState
 import java.time.LocalTime
 import java.time.ZoneId
@@ -108,13 +109,15 @@ fun ClockRoute(viewModel: ClockViewModel = hiltViewModel()) {
                     )
                 }
             }
-            when (uiState.tab) {
-                0 -> FacesTab(uiState.face) { viewModel.onEvent(ClockUiEvent.SelectFace(it)) }
-                1 -> WorldTab(uiState, viewModel::onEvent)
-                2 -> TimeZoneMapTab(viewModel::onEvent)
-                3 -> ConvertTab(uiState)
-                4 -> StopwatchTab()
-                else -> TimerTab()
+            FadeThrough(targetState = uiState.tab, label = "clock-tab") { tab ->
+                when (tab) {
+                    0 -> FacesTab(uiState.face) { viewModel.onEvent(ClockUiEvent.SelectFace(it)) }
+                    1 -> WorldTab(uiState, viewModel::onEvent)
+                    2 -> TimeZoneMapTab(viewModel::onEvent)
+                    3 -> ConvertTab(uiState)
+                    4 -> StopwatchTab()
+                    else -> TimerTab()
+                }
             }
         }
     }
@@ -498,7 +501,16 @@ private fun TimerTab() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        if (running || remainingSeconds > 0) {
+        // Countdown, typed entry and wheels all fade into one another.
+        FadeThrough(
+            targetState = when {
+                running || remainingSeconds > 0 -> 0
+                typedField != null -> 1
+                else -> 2
+            },
+            label = "timer-mode",
+        ) { mode ->
+        if (mode == 0) {
             // Centered time; the display toggle sits below so nothing skews.
             Text(
                 if (showAsSeconds) "${remainingSeconds}s" else formatCountdown(remainingSeconds),
@@ -511,7 +523,7 @@ private fun TimerTab() {
                 Icon(Icons.Filled.SwapHoriz, contentDescription = null)
                 Text(if (showAsSeconds) "  Show mm:ss" else "  Show seconds")
             }
-        } else if (typedField != null) {
+        } else if (mode == 1) {
             // Typed entry: number keyboard, auto-advancing to the next field.
             TypedDuration(
                 hours = hours,
@@ -537,6 +549,7 @@ private fun TimerTab() {
                 WheelLabel("s")
             }
             TextButton(onClick = { typedField = 0 }) { Text("Type a duration") }
+        }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(1L, 5L, 10L, 25L).forEach { m ->

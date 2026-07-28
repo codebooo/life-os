@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -52,13 +53,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.lifeos.core.database.brick.BrickProfileEntity
+import com.lifeos.core.designsystem.component.FadeThrough
+import com.lifeos.core.designsystem.component.FadeVisible
+import com.lifeos.core.designsystem.component.smoothSize
 import com.lifeos.core.designsystem.component.EmptyState
+import com.lifeos.feature.brick.data.BrickPolicy
 import com.lifeos.feature.brick.nfc.BrickReader
 import com.lifeos.feature.brick.nfc.BrickTagWriter
 import com.lifeos.feature.brick.nfc.uid
@@ -74,9 +80,6 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrickRoute(viewModel: BrickViewModel = hiltViewModel()) {
-    val profiles by viewModel.profiles.collectAsState()
-    val active by viewModel.active.collectAsState()
-    val serviceEnabled by viewModel.serviceEnabled.collectAsState()
     val message by viewModel.message.collectAsState()
     val draft by viewModel.draft.collectAsState()
     val pairing by viewModel.pairingTag.collectAsState()
@@ -102,6 +105,14 @@ fun BrickRoute(viewModel: BrickViewModel = hiltViewModel()) {
     // captures the id, otherwise a tap flips the matching mode right here.
     // (Outside the app, the manifest's NFC filters route taps to BrickNfcActivity.)
     val appContext = LocalContext.current
+    // Minute tick so the inverse-mode countdown stays honest without polling.
+    var nowTick by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            nowTick = System.currentTimeMillis()
+            kotlinx.coroutines.delay(15_000)
+        }
+    }
     val nfcReady = remember(appContext) {
         android.nfc.NfcAdapter.getDefaultAdapter(appContext)?.isEnabled != false
     }
@@ -118,10 +129,34 @@ fun BrickRoute(viewModel: BrickViewModel = hiltViewModel()) {
         },
     )
 
-    if (draft != null) {
-        ProfileEditor(viewModel = viewModel, snackbarHostState = snackbarHostState)
-        return
+    // Editor and mode list cross-fade instead of snapping.
+    FadeThrough(targetState = draft != null, label = "brick-editor") { editing ->
+        if (editing) {
+            ProfileEditor(viewModel = viewModel, snackbarHostState = snackbarHostState)
+        } else {
+            BrickOverview(
+                viewModel = viewModel,
+                snackbarHostState = snackbarHostState,
+                nowTick = nowTick,
+                nfcReady = nfcReady,
+                appContext = appContext,
+            )
+        }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BrickOverview(
+    viewModel: BrickViewModel,
+    snackbarHostState: SnackbarHostState,
+    nowTick: Long,
+    nfcReady: Boolean,
+    appContext: android.content.Context,
+) {
+    val profiles by viewModel.profiles.collectAsState()
+    val active by viewModel.active.collectAsState()
+    val serviceEnabled by viewModel.serviceEnabled.collectAsState()
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Brick") }) },
@@ -194,14 +229,46 @@ fun BrickRoute(viewModel: BrickViewModel = hiltViewModel()) {
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            Text(
-                                when (mode.profile.deactivator) {
-                                    "NFC" -> "Ends when you scan the paired tag"
-                                    "TIME" -> "Ends at ${formatMinute(mode.profile.endMinuteOfDay)}"
-                                    else -> if (mode.profile.strict) "Strict — cannot be ended early" else "Can be ended here"
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
+                            if (mode.profile.inverse) {
+                                val unlockedUntil = mode.session.unlockUntil?.takeIf { it > nowTick }
+                                val left = BrickPolicy.unlocksLeft(mode.rules)
+                                Text(
+                                    if (unlockedUntil != null) {
+                                        "Open until ${TIME.format(Date(unlockedUntil))} " +
+                                            "(${((unlockedUntil - nowTick) / 60_000L).coerceAtLeast(0)} min left)"
+                                    } else {
+                                        BrickPolicy.unlockHint(mode.rules)
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                                Text(
+                                    "Window ends at ${formatMinute(mode.profile.endMinuteOfDay)} - " +
+                                        (
+                                            if (left == null) {
+                                                "unlimited unlocks"
+                                            } else {
+                                                "$left of ${mode.profile.unlockAllowance} unlocks left, " +
+                                                    "${mode.profile.unlockMinutes} min each"
+                                            }
+                                            ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            } else {
+                                Text(
+                                    when (mode.profile.deactivator) {
+                                        "NFC" -> "Ends when you scan the paired tag"
+                                        "TIME" -> "Ends at ${formatMinute(mode.profile.endMinuteOfDay)}"
+                                        else ->
+                                            if (mode.profile.strict) {
+                                                "Strict — cannot be ended early"
+                                            } else {
+                                                "Can be ended here"
+                                            }
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                )
+                            }
                             OutlinedButton(onClick = { viewModel.stopNow() }) { Text("End mode") }
                         }
                     }
@@ -247,8 +314,21 @@ private fun ProfileCard(
                 Text(
                     buildString {
                         append("${profile.blockedPackages.lines().count { it.isNotBlank() }} app(s)")
-                        append(" · on: ${activatorLabel(profile.activator, profile.startMinuteOfDay)}")
-                        append(" · off: ${activatorLabel(profile.deactivator, profile.endMinuteOfDay)}")
+                        if (profile.inverse) {
+                            append(" · inverse ${formatMinute(profile.startMinuteOfDay)}")
+                            append("-${formatMinute(profile.endMinuteOfDay)}")
+                            append(" · ${profile.unlockMinutes} min per tap")
+                            append(
+                                if (profile.unlockAllowance <= 0) {
+                                    " · unlimited unlocks"
+                                } else {
+                                    " · ${profile.unlockAllowance} unlock(s)"
+                                },
+                            )
+                        } else {
+                            append(" · on: ${activatorLabel(profile.activator, profile.startMinuteOfDay)}")
+                            append(" · off: ${activatorLabel(profile.deactivator, profile.endMinuteOfDay)}")
+                        }
                         if (profile.strict) append(" · strict")
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -306,32 +386,130 @@ private fun ProfileEditor(viewModel: BrickViewModel, snackbarHostState: Snackbar
                 )
             }
 
-            item { Text("Turns on with", style = MaterialTheme.typography.titleSmall) }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("MANUAL" to "By hand", "NFC" to "NFC tag", "TIME" to "Time").forEach { (value, label) ->
-                        FilterChip(
-                            selected = current.activator == value,
-                            onClick = { viewModel.updateDraft { it.copy(activator = value) } },
-                            label = { Text(label) },
-                        )
-                    }
+                Surface(modifier = Modifier.fillMaxWidth()) {
+                    ListItem(
+                        headlineContent = { Text("Inverse mode") },
+                        supportingContent = {
+                            Text(
+                                "Blocked for the whole window you set; a tag tap buys a stretch of access. " +
+                                    "Put the tag somewhere inconvenient and every unlock costs a walk.",
+                            )
+                        },
+                        trailingContent = {
+                            Switch(
+                                checked = current.inverse,
+                                onCheckedChange = { value ->
+                                    viewModel.updateDraft {
+                                        it.copy(
+                                            inverse = value,
+                                            // The window drives both edges in inverse mode.
+                                            activator = if (value) "TIME" else it.activator,
+                                            deactivator = if (value) "TIME" else it.deactivator,
+                                        )
+                                    }
+                                },
+                            )
+                        },
+                    )
                 }
             }
-            item { Text("Turns off with", style = MaterialTheme.typography.titleSmall) }
-            item {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("MANUAL" to "By hand", "NFC" to "NFC tag", "TIME" to "Time").forEach { (value, label) ->
-                        FilterChip(
-                            selected = current.deactivator == value,
-                            onClick = { viewModel.updateDraft { it.copy(deactivator = value) } },
-                            label = { Text(label) },
-                        )
+
+            if (current.inverse) {
+                item {
+                    MinuteField(
+                        label = "Blocked from",
+                        minuteOfDay = current.startMinuteOfDay,
+                        onChange = { value -> viewModel.updateDraft { it.copy(startMinuteOfDay = value) } },
+                    )
+                }
+                item {
+                    MinuteField(
+                        label = "Blocked until",
+                        minuteOfDay = current.endMinuteOfDay,
+                        onChange = { value -> viewModel.updateDraft { it.copy(endMinuteOfDay = value) } },
+                    )
+                }
+                item { Text("One unlock lasts", style = MaterialTheme.typography.titleSmall) }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(15, 30, 60, 120).forEach { minutes ->
+                            FilterChip(
+                                selected = current.unlockMinutes == minutes,
+                                onClick = { viewModel.updateDraft { it.copy(unlockMinutes = minutes) } },
+                                label = { Text(if (minutes < 60) "${minutes}m" else "${minutes / 60}h") },
+                            )
+                        }
+                    }
+                }
+                item {
+                    OutlinedTextField(
+                        value = current.unlockMinutes.toString(),
+                        onValueChange = { value ->
+                            val minutes = value.filter { it.isDigit() }.take(4).toIntOrNull() ?: 0
+                            viewModel.updateDraft { it.copy(unlockMinutes = minutes) }
+                        },
+                        label = { Text("Unlock length in minutes") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                item { Text("Unlocks per window", style = MaterialTheme.typography.titleSmall) }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(
+                            1 to "Once only",
+                            2 to "Twice",
+                            3 to "3 times",
+                            0 to "Unlimited",
+                        ).forEach { (allowance, label) ->
+                            FilterChip(
+                                selected = current.unlockAllowance == allowance,
+                                onClick = { viewModel.updateDraft { it.copy(unlockAllowance = allowance) } },
+                                label = { Text(label) },
+                            )
+                        }
+                    }
+                }
+                item {
+                    Text(
+                        "The count resets when the window next starts, so \"once only\" means one unlock " +
+                            "per day. Outside the window nothing is blocked and a tap does nothing.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            if (!current.inverse) {
+                item { Text("Turns on with", style = MaterialTheme.typography.titleSmall) }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("MANUAL" to "By hand", "NFC" to "NFC tag", "TIME" to "Time").forEach { (value, label) ->
+                            FilterChip(
+                                selected = current.activator == value,
+                                onClick = { viewModel.updateDraft { it.copy(activator = value) } },
+                                label = { Text(label) },
+                            )
+                        }
+                    }
+                }
+                item { Text("Turns off with", style = MaterialTheme.typography.titleSmall) }
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("MANUAL" to "By hand", "NFC" to "NFC tag", "TIME" to "Time").forEach { (value, label) ->
+                            FilterChip(
+                                selected = current.deactivator == value,
+                                onClick = { viewModel.updateDraft { it.copy(deactivator = value) } },
+                                label = { Text(label) },
+                            )
+                        }
                     }
                 }
             }
 
-            if (current.activator == "NFC" || current.deactivator == "NFC") {
+            if (current.inverse || current.activator == "NFC" || current.deactivator == "NFC") {
                 item {
                     Card {
                         Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -373,7 +551,7 @@ private fun ProfileEditor(viewModel: BrickViewModel, snackbarHostState: Snackbar
                 }
             }
 
-            if (current.activator == "TIME") {
+            if (!current.inverse && current.activator == "TIME") {
                 item {
                     MinuteField(
                         label = "Starts at",
@@ -382,7 +560,7 @@ private fun ProfileEditor(viewModel: BrickViewModel, snackbarHostState: Snackbar
                     )
                 }
             }
-            if (current.deactivator == "TIME") {
+            if (!current.inverse && current.deactivator == "TIME") {
                 item {
                     MinuteField(
                         label = "Ends at",

@@ -32,11 +32,15 @@ class BrickScheduler @Inject constructor(
         profiles.forEach { profile ->
             cancel(profile.id, starting = true)
             cancel(profile.id, starting = false)
-            if (profile.activator != "TIME" && profile.deactivator != "TIME") return@forEach
-            profile.startMinuteOfDay?.takeIf { profile.activator == "TIME" }?.let {
+            // Inverse modes are always schedule-driven on both edges: the window
+            // is the blocked stretch, and tag taps only work inside it.
+            val timeStart = profile.inverse || profile.activator == "TIME"
+            val timeEnd = profile.inverse || profile.deactivator == "TIME"
+            if (!timeStart && !timeEnd) return@forEach
+            profile.startMinuteOfDay?.takeIf { timeStart }?.let {
                 schedule(profile.id, it, starting = true)
             }
-            profile.endMinuteOfDay?.takeIf { profile.deactivator == "TIME" }?.let {
+            profile.endMinuteOfDay?.takeIf { timeEnd }?.let {
                 schedule(profile.id, it, starting = false)
             }
         }

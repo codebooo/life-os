@@ -1,5 +1,6 @@
 package com.lifeos.core.database.brick
 
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Entity
 import androidx.room.Insert
@@ -17,6 +18,10 @@ import kotlinx.coroutines.flow.Flow
  * [nfcTagId] is the paired tag's hardware id (hex) — the tap that flips the mode.
  * [startMinuteOfDay]/[endMinuteOfDay] drive TIME activation (minutes since midnight).
  * [strict] blocks the in-app "stop" button, so only the real condition ends it.
+ *
+ * [inverse] flips the whole idea around: the schedule is the blocked window and
+ * a tag tap buys [unlockMinutes] of access inside it, at most [unlockAllowance]
+ * times per window (0 = unlimited).
  */
 @Entity(tableName = "brick_profiles")
 data class BrickProfileEntity(
@@ -30,6 +35,9 @@ data class BrickProfileEntity(
     val startMinuteOfDay: Int? = null,
     val endMinuteOfDay: Int? = null,
     val strict: Boolean = false,
+    @ColumnInfo(defaultValue = "0") val inverse: Boolean = false,
+    @ColumnInfo(defaultValue = "60") val unlockMinutes: Int = 60,
+    @ColumnInfo(defaultValue = "1") val unlockAllowance: Int = 1,
     val createdAt: Long,
 )
 
@@ -52,6 +60,10 @@ data class BrickSessionEntity(
     val startedBy: String,
     /** Attempts to open a blocked app while the mode was live. */
     val blockedAttempts: Int = 0,
+    /** Inverse mode: access is open until this timestamp (null = blocked now). */
+    val unlockUntil: Long? = null,
+    /** Inverse mode: unlocks spent in this run of the schedule. */
+    @ColumnInfo(defaultValue = "0") val unlocksUsed: Int = 0,
 )
 
 /** Foreground minutes per app per day — powers the daily-allowance limits. */
@@ -122,6 +134,9 @@ interface BrickDao {
 
     @Query("UPDATE brick_sessions SET endedAt = :endedAt WHERE endedAt IS NULL")
     suspend fun endAllSessions(endedAt: Long)
+
+    @Query("UPDATE brick_sessions SET unlockUntil = :until, unlocksUsed = :used WHERE id = :sessionId")
+    suspend fun setUnlock(sessionId: Long, until: Long?, used: Int)
 
     // ---- usage -----------------------------------------------------------
     @Insert(onConflict = OnConflictStrategy.REPLACE)

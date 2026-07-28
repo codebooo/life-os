@@ -48,6 +48,11 @@ class BrickRepository @Inject constructor(
             deactivator = profile.deactivator,
             strict = profile.strict,
             endMinuteOfDay = profile.endMinuteOfDay,
+            inverse = profile.inverse,
+            unlockMinutes = profile.unlockMinutes,
+            unlockAllowance = profile.unlockAllowance,
+            unlockUntil = session.unlockUntil,
+            unlocksUsed = session.unlocksUsed,
         )
     }
 
@@ -139,6 +144,9 @@ class BrickRepository @Inject constructor(
         val running = _active.value
         if (running != null) {
             val runningTag = running.profile.nfcTagId?.trim()?.uppercase()
+            // Inverse mode: the tap buys access inside the window instead of
+            // ending the mode.
+            if (running.profile.inverse && runningTag == tagId) return grantUnlock(running)
             return when {
                 runningTag == tagId ->
                     if (stop("NFC")) "\"${running.profile.name}\" unlocked" else "Wrong tag for this mode"
@@ -149,7 +157,64 @@ class BrickRepository @Inject constructor(
         }
         val profile = brickDao.profileByTag(tagId)
             ?: return "Tag $tagId is not paired with any mode yet — pair it in Brick"
+        if (profile.inverse) {
+            // Inverse modes only exist inside their window; outside it nothing
+            // is blocked, so there is nothing to unlock.
+            val inWindow = withinWindow(profile)
+            if (!inWindow) {
+                return "\"${profile.name}\" only blocks between " +
+                    "${BrickPolicy.formatMinute(profile.startMinuteOfDay)} and " +
+                    "${BrickPolicy.formatMinute(profile.endMinuteOfDay)} — nothing to unlock right now"
+            }
+            // The window is live but no session exists yet (phone was off at the
+            // start minute): open it, then spend an unlock.
+            if (!start(profile.id, "TIME")) return "Couldn't start the mode"
+            val running = _active.value ?: return "Couldn't start the mode"
+            return grantUnlock(running)
+        }
         return if (start(profile.id, "NFC")) "\"${profile.name}\" is now blocking" else "Couldn't start the mode"
+    }
+
+    /** Spends one unlock of an inverse mode and reports what happened. */
+    private suspend fun grantUnlock(running: ActiveMode): String {
+        val name = running.profile.name
+        return when (val decision = BrickPolicy.unlock(running.rules)) {
+            is UnlockDecision.AlreadyOpen ->
+                "\"$name\" is already open until ${clock(decision.until)}"
+
+            is UnlockDecision.NoneLeft ->
+                "No unlocks left for \"$name\" — it opens again at " +
+                    BrickPolicy.formatMinute(running.profile.endMinuteOfDay)
+
+            is UnlockDecision.Granted -> {
+                brickDao.setUnlock(running.session.id, decision.until, decision.used)
+                val session = running.session.copy(unlockUntil = decision.until, unlocksUsed = decision.used)
+                _active.value = snapshot(session, running.profile)
+                val quota = if (decision.allowance <= 0) {
+                    "unlimited unlocks"
+                } else {
+                    "${decision.used} of ${decision.allowance} used"
+                }
+                "\"$name\" open for ${running.profile.unlockMinutes} min, " +
+                    "until ${clock(decision.until)} ($quota)"
+            }
+        }
+    }
+
+    /** True when [profile]'s schedule window covers the current minute. */
+    private fun withinWindow(profile: BrickProfileEntity): Boolean {
+        val start = profile.startMinuteOfDay ?: return true
+        val end = profile.endMinuteOfDay ?: return true
+        val now = minuteOfDayNow()
+        // Windows that wrap past midnight (22:00 - 06:00) count both sides.
+        return if (start <= end) now in start until end else now >= start || now < end
+    }
+
+    /** Remaining unlock time in millis, or null when nothing is open. */
+    fun unlockRemaining(): Long? {
+        val rules = _active.value?.rules ?: return null
+        if (!BrickPolicy.unlockActive(rules)) return null
+        return (rules.unlockUntil ?: 0L) - System.currentTimeMillis()
     }
 
     // ---- the hot path ------------------------------------------------------
@@ -218,7 +283,9 @@ class BrickRepository @Inject constructor(
     suspend fun onScheduleTick(profileId: Long, starting: Boolean) {
         val profile = brickDao.profile(profileId) ?: return
         if (starting) {
-            if (_active.value == null && profile.activator == "TIME") start(profileId, "TIME")
+            if (_active.value == null && (profile.activator == "TIME" || profile.inverse)) {
+                start(profileId, "TIME")
+            }
         } else {
             val running = _active.value
             if (running?.profile?.id == profileId) stop("TIME")
@@ -228,11 +295,14 @@ class BrickRepository @Inject constructor(
 
     private fun today(): String = DATE.format(Date())
 
+    private fun clock(millis: Long): String = CLOCK.format(Date(millis))
+
     companion object {
         /** Internal override used when a profile disappears; bypasses strict rules. */
         const val FORCE = BrickPolicy.FORCE
         private const val TAG = "BrickRepository"
         private val DATE = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        private val CLOCK = SimpleDateFormat("HH:mm", Locale.US)
 
         fun minuteOfDayNow(): Int = Calendar.getInstance().let {
             it.get(Calendar.HOUR_OF_DAY) * 60 + it.get(Calendar.MINUTE)

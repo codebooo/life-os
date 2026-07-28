@@ -39,6 +39,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import com.lifeos.core.designsystem.component.FadeThrough
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -90,10 +91,12 @@ fun PastebinRoute(viewModel: PastebinViewModel = hiltViewModel()) {
                     )
                 }
             }
-            when (state.tab) {
-                0 -> ComposerTab(state, viewModel)
-                1 -> ListTab(state, viewModel)
-                else -> SettingsTab(state, viewModel)
+            FadeThrough(targetState = state.tab, label = "pastebin-tab") { tab ->
+                when (tab) {
+                    0 -> ComposerTab(state, viewModel)
+                    1 -> ListTab(state, viewModel)
+                    else -> SettingsTab(state, viewModel)
+                }
             }
         }
     }

@@ -112,4 +112,90 @@ class BrickPolicyTest {
     private companion object {
         const val OWN = "com.lifeos"
     }
+
+    // ---- inverse mode ------------------------------------------------------
+
+    private val inverse = ModeRules(
+        profileName = "Socials curfew",
+        blockedPackages = setOf("com.instagram.android"),
+        limits = emptyMap(),
+        deactivator = "TIME",
+        strict = false,
+        endMinuteOfDay = 22 * 60,
+        inverse = true,
+        unlockMinutes = 60,
+        unlockAllowance = 1,
+    )
+
+    @Test
+    fun `inverse mode blocks while nothing is unlocked`() {
+        val decision = BrickPolicy.decide(inverse, "com.instagram.android", OWN, 0, nowMillis = 1_000L)
+        assertTrue(decision is BlockDecision.Blocked)
+    }
+
+    @Test
+    fun `a live unlock allows the blocked app`() {
+        val rules = inverse.copy(unlockUntil = 10_000L, unlocksUsed = 1)
+        assertEquals(
+            BlockDecision.Allow,
+            BrickPolicy.decide(rules, "com.instagram.android", OWN, 0, nowMillis = 5_000L),
+        )
+    }
+
+    @Test
+    fun `an expired unlock blocks again`() {
+        val rules = inverse.copy(unlockUntil = 10_000L, unlocksUsed = 1)
+        val decision = BrickPolicy.decide(rules, "com.instagram.android", OWN, 0, nowMillis = 10_001L)
+        assertTrue(decision is BlockDecision.Blocked)
+    }
+
+    @Test
+    fun `first tap grants an unlock of the configured length`() {
+        val decision = BrickPolicy.unlock(inverse, nowMillis = 1_000L)
+        assertTrue(decision is UnlockDecision.Granted)
+        decision as UnlockDecision.Granted
+        assertEquals(1_000L + 60 * 60_000L, decision.until)
+        assertEquals(1, decision.used)
+    }
+
+    @Test
+    fun `a single-unlock window refuses the second tap`() {
+        val spent = inverse.copy(unlocksUsed = 1, unlockUntil = 5_000L)
+        assertTrue(BrickPolicy.unlock(spent, nowMillis = 6_000L) is UnlockDecision.NoneLeft)
+    }
+
+    @Test
+    fun `tapping during an open unlock does not spend another`() {
+        val open = inverse.copy(unlocksUsed = 1, unlockUntil = 9_000L)
+        assertTrue(BrickPolicy.unlock(open, nowMillis = 5_000L) is UnlockDecision.AlreadyOpen)
+    }
+
+    @Test
+    fun `multiple unlocks are allowed up to the allowance`() {
+        val rules = inverse.copy(unlockAllowance = 3, unlocksUsed = 2, unlockUntil = 1_000L)
+        val decision = BrickPolicy.unlock(rules, nowMillis = 2_000L)
+        assertTrue(decision is UnlockDecision.Granted)
+        assertEquals(3, (decision as UnlockDecision.Granted).used)
+        assertTrue(BrickPolicy.unlock(rules.copy(unlocksUsed = 3), nowMillis = 2_000L) is UnlockDecision.NoneLeft)
+    }
+
+    @Test
+    fun `unlimited allowance never runs out`() {
+        val rules = inverse.copy(unlockAllowance = 0, unlocksUsed = 12, unlockUntil = 1_000L)
+        assertEquals(null, BrickPolicy.unlocksLeft(rules))
+        assertTrue(BrickPolicy.unlock(rules, nowMillis = 2_000L) is UnlockDecision.Granted)
+    }
+
+    @Test
+    fun `inverse modes only end on their schedule`() {
+        assertTrue(BrickPolicy.canStop(inverse, "TIME"))
+        assertEquals(false, BrickPolicy.canStop(inverse, "NFC"))
+        assertEquals(false, BrickPolicy.canStop(inverse, "MANUAL"))
+        assertTrue(BrickPolicy.canStop(inverse, BrickPolicy.FORCE))
+    }
+
+    @Test
+    fun `LifeOS itself stays reachable during an inverse window`() {
+        assertEquals(BlockDecision.Allow, BrickPolicy.decide(inverse, OWN, OWN, 0, nowMillis = 1_000L))
+    }
 }
