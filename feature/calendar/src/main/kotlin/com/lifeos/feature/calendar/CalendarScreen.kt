@@ -5,8 +5,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -352,8 +354,6 @@ private fun MonthView(uiState: CalendarUiState, onEvent: (CalendarUiEvent) -> Un
 
 // ----------------------------------------------------------------- timeline --
 
-private val HOUR_HEIGHT = 56.dp
-
 @Composable
 private fun WeekView(uiState: CalendarUiState, onEvent: (CalendarUiEvent) -> Unit) {
     val days = (0 until 7).map { uiState.anchor + it * DAY_MS }
@@ -380,7 +380,13 @@ private fun WeekView(uiState: CalendarUiState, onEvent: (CalendarUiEvent) -> Uni
                 }
             }
         }
-        Timeline(days = days, events = uiState.events, onEvent = onEvent)
+        Timeline(
+            days = days,
+            events = uiState.events,
+            hourHeight = uiState.hourHeightDp.dp,
+            minutesPerStep = uiState.minutesPerStep,
+            onEvent = onEvent,
+        )
     }
 }
 
@@ -402,27 +408,55 @@ private fun DayView(uiState: CalendarUiState, onEvent: (CalendarUiEvent) -> Unit
                 )
             }
         }
-        Timeline(days = listOf(uiState.anchor), events = uiState.events, onEvent = onEvent)
+        Timeline(
+            days = listOf(uiState.anchor),
+            events = uiState.events,
+            hourHeight = uiState.hourHeightDp.dp,
+            minutesPerStep = uiState.minutesPerStep,
+            onEvent = onEvent,
+        )
     }
 }
 
-/** Shared hour grid: 24 rows, tappable slots, positioned event blocks, now-line. */
+/**
+ * Shared hour grid. Pinch anywhere to zoom: the hour height scales and the
+ * ladder snaps through 60/30/15/10/5-minute steps, down to a compressed
+ * overview where a whole day fits on screen. Long-press then drag inside a day
+ * column sweeps out a time range (Google-Calendar style) and opens the editor
+ * pre-filled with those exact times.
+ */
 @Composable
 private fun Timeline(
     days: List<Long>,
     events: List<CalendarEventEntity>,
+    hourHeight: androidx.compose.ui.unit.Dp,
+    minutesPerStep: Int,
     onEvent: (CalendarUiEvent) -> Unit,
 ) {
-    val scroll = rememberScrollState(initial = with(LocalDensity.current) { (HOUR_HEIGHT * 7).roundToPx() })
+    val density = LocalDensity.current
+    val scroll = rememberScrollState(initial = with(density) { (hourHeight * 7).roundToPx() })
     val now = System.currentTimeMillis()
+    val hourHeightPx = with(density) { hourHeight.toPx() }
+
+    // Pinch zoom: vertical scale drives hour height, which in turn picks the
+    // ladder granularity — coarse when compressed, fine when stretched.
+    val zoomModifier = Modifier.pointerInput(Unit) {
+        detectTransformGestures { _, _, zoom, _ ->
+            if (zoom == 1f) return@detectTransformGestures
+            val next = (hourHeight.value * zoom).coerceIn(24f, 220f)
+            onEvent(CalendarUiEvent.SetZoom(stepForHeight(next), next))
+        }
+    }
+
     Row(
         modifier = Modifier
             .fillMaxSize()
+            .then(zoomModifier)
             .verticalScroll(scroll),
     ) {
         Column(modifier = Modifier.width(44.dp)) {
             repeat(24) { hour ->
-                Box(modifier = Modifier.height(HOUR_HEIGHT), contentAlignment = Alignment.TopCenter) {
+                Box(modifier = Modifier.height(hourHeight), contentAlignment = Alignment.TopCenter) {
                     Text(
                         "%02d".format(hour),
                         style = MaterialTheme.typography.labelSmall,
@@ -435,37 +469,95 @@ private fun Timeline(
             val dayEvents = events.filter {
                 !it.allDay && it.startsAt < day + DAY_MS && it.endsAt > day
             }
+            // Live drag selection for this column, in minutes from midnight.
+            var dragFrom by remember(day) { mutableStateOf<Int?>(null) }
+            var dragTo by remember(day) { mutableStateOf<Int?>(null) }
+
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(HOUR_HEIGHT * 24)
+                    .height(hourHeight * 24)
                     .padding(horizontal = 1.dp)
-                    .pointerInput(day) {
+                    .pointerInput(day, minutesPerStep, hourHeightPx) {
                         detectTapGestures { offset ->
-                            val hour = (offset.y / (HOUR_HEIGHT.toPx())).toInt().coerceIn(0, 23)
+                            val hour = (offset.y / hourHeightPx).toInt().coerceIn(0, 23)
                             onEvent(CalendarUiEvent.NewEventAt(day, hour))
                         }
+                    }
+                    .pointerInput(day, minutesPerStep, hourHeightPx) {
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = { offset ->
+                                val minute = snapMinutes(offset.y / hourHeightPx * 60f, minutesPerStep)
+                                dragFrom = minute
+                                dragTo = minute + minutesPerStep
+                            },
+                            onDrag = { change, _ ->
+                                val start = dragFrom ?: return@detectDragGesturesAfterLongPress
+                                val minute = snapMinutes(change.position.y / hourHeightPx * 60f, minutesPerStep)
+                                // Always keep at least one step selected.
+                                dragTo = if (minute <= start) start + minutesPerStep else minute
+                            },
+                            onDragEnd = {
+                                val start = dragFrom
+                                val end = dragTo
+                                if (start != null && end != null) {
+                                    onEvent(
+                                        CalendarUiEvent.NewEventForRange(
+                                            dayStart = day,
+                                            startMinuteOfDay = start.coerceIn(0, 24 * 60 - minutesPerStep),
+                                            durationMinutes = (end - start).coerceAtLeast(minutesPerStep),
+                                        ),
+                                    )
+                                }
+                                dragFrom = null
+                                dragTo = null
+                            },
+                            onDragCancel = { dragFrom = null; dragTo = null },
+                        )
                     },
             ) {
-                // Hour grid lines.
-                repeat(24) { hour ->
+                // Ladder lines: every step, with the hour lines drawn stronger.
+                val stepsPerDay = (24 * 60) / minutesPerStep
+                repeat(stepsPerDay + 1) { index ->
+                    val minute = index * minutesPerStep
+                    val onHour = minute % 60 == 0
                     HorizontalDivider(
-                        modifier = Modifier.offset(y = HOUR_HEIGHT * hour),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.offset(y = hourHeight * (minute / 60f)),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (onHour) 0.7f else 0.3f),
                     )
+                }
+                // The sweep being dragged right now.
+                val from = dragFrom
+                val to = dragTo
+                if (from != null && to != null) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        shape = RoundedCornerShape(6.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .offset(y = hourHeight * (from / 60f))
+                            .height(hourHeight * ((to - from) / 60f)),
+                    ) {
+                        Text(
+                            "${formatMinuteOfDay(from)} – ${formatMinuteOfDay(to)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(4.dp),
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        )
+                    }
                 }
                 dayEvents.forEach { event ->
                     val startMin = ((maxOf(event.startsAt, day) - day) / 60_000L).toInt()
                     val endMin = ((minOf(event.endsAt, day + DAY_MS) - day) / 60_000L).toInt()
-                    val height = ((endMin - startMin).coerceAtLeast(24) / 60f)
+                    val height = ((endMin - startMin).coerceAtLeast(minutesPerStep) / 60f)
                     Surface(
                         onClick = { onEvent(CalendarUiEvent.EditEvent(event)) },
                         color = MaterialTheme.colorScheme.primaryContainer,
                         shape = RoundedCornerShape(6.dp),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .offset(y = HOUR_HEIGHT * (startMin / 60f))
-                            .height(HOUR_HEIGHT * height),
+                            .offset(y = hourHeight * (startMin / 60f))
+                            .height(hourHeight * height),
                     ) {
                         Column(modifier = Modifier.padding(4.dp)) {
                             Text(
@@ -475,19 +567,21 @@ private fun Timeline(
                                 overflow = TextOverflow.Ellipsis,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
-                            Text(
-                                TIME.format(Date(event.startsAt)),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
-                            )
+                            // A squeezed block has no room for a second line.
+                            if (hourHeight * height > 34.dp) {
+                                Text(
+                                    TIME.format(Date(event.startsAt)),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                                )
+                            }
                         }
                     }
                 }
-                // Current-time indicator on today's column.
                 if (CalendarViewModel.startOfDay(now) == day) {
                     val nowMin = ((now - day) / 60_000L).toInt()
                     HorizontalDivider(
-                        modifier = Modifier.offset(y = HOUR_HEIGHT * (nowMin / 60f)),
+                        modifier = Modifier.offset(y = hourHeight * (nowMin / 60f)),
                         thickness = 2.dp,
                         color = MaterialTheme.colorScheme.error,
                     )
@@ -496,6 +590,22 @@ private fun Timeline(
         }
     }
 }
+
+/** Rounds a minute-of-day to the visible ladder step. */
+private fun snapMinutes(minutes: Float, step: Int): Int =
+    ((minutes / step).toInt() * step).coerceIn(0, 24 * 60)
+
+/** Finer ladder the more the user zooms in; coarse when compressed. */
+private fun stepForHeight(hourHeightDp: Float): Int = when {
+    hourHeightDp >= 180f -> 5
+    hourHeightDp >= 130f -> 10
+    hourHeightDp >= 95f -> 15
+    hourHeightDp >= 60f -> 30
+    else -> 60
+}
+
+private fun formatMinuteOfDay(minute: Int): String =
+    "%02d:%02d".format((minute / 60).coerceAtMost(23), minute % 60)
 
 // ------------------------------------------------------------------- shared --
 
@@ -534,7 +644,14 @@ private fun EventRow(event: CalendarEventEntity, onEvent: (CalendarUiEvent) -> U
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EventEditorSheet(uiState: CalendarUiState, onEvent: (CalendarUiEvent) -> Unit) {
-    ModalBottomSheet(onDismissRequest = { onEvent(CalendarUiEvent.ToggleEditor) }) {
+    // Fully expanded immediately: tapping + should land straight in the form.
+    val sheetState = androidx.compose.material3.rememberModalBottomSheetState(
+        skipPartiallyExpanded = true,
+    )
+    ModalBottomSheet(
+        onDismissRequest = { onEvent(CalendarUiEvent.ToggleEditor) },
+        sheetState = sheetState,
+    ) {
         Column(
             modifier = Modifier
                 .padding(horizontal = 24.dp)
