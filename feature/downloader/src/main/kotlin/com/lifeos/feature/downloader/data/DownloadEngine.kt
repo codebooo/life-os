@@ -73,9 +73,9 @@ class DownloadEngine @Inject constructor(
         try {
             resolver.openOutputStream(target)!!.use { out ->
                 if (candidate.kind == "HLS") {
-                    val segments = resolveHlsSegments(candidate.url)
+                    val segments = resolveHlsSegments(candidate.url, candidate.headers)
                     segments.forEachIndexed { index, segmentUrl ->
-                        client.newCall(Request.Builder().url(segmentUrl).header("User-Agent", UA).build())
+                        client.newCall(request(segmentUrl, candidate.headers))
                             .execute().use { response ->
                                 check(response.isSuccessful) { "HTTP ${response.code} on segment" }
                                 total += response.body.byteStream().copyTo(out)
@@ -83,7 +83,7 @@ class DownloadEngine @Inject constructor(
                         downloadDao.setProgress(id, "RUNNING", ((index + 1) * 100 / segments.size))
                     }
                 } else {
-                    client.newCall(Request.Builder().url(candidate.url).header("User-Agent", UA).build())
+                    client.newCall(request(candidate.url, candidate.headers))
                         .execute().use { response ->
                             check(response.isSuccessful) { "HTTP ${response.code}" }
                             val length = response.body.contentLength()
@@ -114,11 +114,24 @@ class DownloadEngine @Inject constructor(
         }
     }
 
+    /**
+     * Builds the stream request. Session-bound links (resolved by the offscreen
+     * player) only work when their Referer, Cookie and User-Agent come along.
+     */
+    private fun request(url: String, headers: Map<String, String>): Request =
+        Request.Builder().url(url).apply {
+            header("User-Agent", headers["User-Agent"] ?: UA)
+            headers.forEach { (name, value) ->
+                if (!name.equals("User-Agent", ignoreCase = true) && value.isNotBlank()) {
+                    header(name, value)
+                }
+            }
+        }.build()
+
     /** Master playlists pick the highest-bandwidth variant; media playlists list segments. */
-    private fun resolveHlsSegments(playlistUrl: String): List<String> {
+    private fun resolveHlsSegments(playlistUrl: String, headers: Map<String, String>): List<String> {
         fun fetch(u: String): String =
-            client.newCall(Request.Builder().url(u).header("User-Agent", UA).build()).execute()
-                .use { it.body.string() }
+            client.newCall(request(u, headers)).execute().use { it.body.string() }
 
         fun absolute(base: String, line: String): String = when {
             line.startsWith("http") -> line

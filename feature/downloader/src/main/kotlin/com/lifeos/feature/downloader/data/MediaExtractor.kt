@@ -6,12 +6,24 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** Result of a static page scan. */
+data class ExtractResult(
+    val candidates: List<MediaCandidate>,
+    /**
+     * True when the page drives its player through obfuscated, session-bound
+     * JavaScript, so only [PlayerResolver] can produce a working link.
+     */
+    val playerNeeded: Boolean = false,
+)
+
 /** A downloadable media stream discovered on a page. */
 data class MediaCandidate(
     val url: String,
     val title: String,
     val mimeType: String,
     val kind: String, // VIDEO, AUDIO, HLS
+    /** Request headers the stream needs (Referer, Cookie, User-Agent). */
+    val headers: Map<String, String> = emptyMap(),
 )
 
 /**
@@ -34,39 +46,45 @@ class MediaExtractor @Inject constructor() {
         .followRedirects(true)
         .build()
 
-    fun extract(pageUrl: String): List<MediaCandidate> {
+    fun extract(pageUrl: String): ExtractResult {
         val url = normalize(pageUrl.trim())
         require(url.startsWith("http")) { "Enter a full http(s) URL" }
 
         // The URL itself may already be the media file.
         directKind(url)?.let { kind ->
-            return listOf(MediaCandidate(url, fileName(url), mimeFor(url), kind))
+            return ExtractResult(listOf(MediaCandidate(url, fileName(url), mimeFor(url), kind)))
         }
 
         val found = linkedMapOf<String, MediaCandidate>()
         siteHelper(url)?.let { helper -> found.putAll(helper.associateBy { it.url }) }
-        if (found.size >= 4) return found.values.toList()
+        if (found.size >= 4) return ExtractResult(found.values.toList())
 
-        val page = fetch(url) ?: return found.values.toList()
+        val page = fetch(url) ?: return ExtractResult(found.values.toList())
         if (page.mediaType.startsWith("video/") || page.mediaType.startsWith("audio/")) {
-            return listOf(
-                MediaCandidate(
-                    url = url,
-                    title = fileName(url),
-                    mimeType = page.mediaType,
-                    kind = if (page.mediaType.startsWith("audio/")) "AUDIO" else "VIDEO",
+            return ExtractResult(
+                listOf(
+                    MediaCandidate(
+                        url = url,
+                        title = fileName(url),
+                        mimeType = page.mediaType,
+                        kind = if (page.mediaType.startsWith("audio/")) "AUDIO" else "VIDEO",
+                    ),
                 ),
             )
         }
         if (!page.mediaType.contains("html") && !page.mediaType.contains("json")) {
-            return found.values.toList()
+            return ExtractResult(found.values.toList())
         }
+
+        // Scrambled player links cannot be repaired here; the page's own player
+        // has to resolve them (PlayerResolver).
+        val playerNeeded = KVS_MARKER.containsMatchIn(page.body)
 
         found.putAll(parseHtml(page.body, url).associateBy { it.url })
 
         // One level of iframe following: most file hosts and embeds put the real
         // player one frame deeper.
-        if (found.isEmpty()) {
+        if (found.isEmpty() && !playerNeeded) {
             IFRAME.findAll(page.body)
                 .map { absolute(it.groupValues[1], url) }
                 .filter { it.startsWith("http") && it != url }
@@ -79,7 +97,7 @@ class MediaExtractor @Inject constructor() {
                 }
         }
 
-        return found.values.take(10).toList()
+        return ExtractResult(found.values.take(10).toList(), playerNeeded)
     }
 
     // ---- site helpers ------------------------------------------------------
@@ -177,6 +195,7 @@ class MediaExtractor @Inject constructor() {
             if (candidate.startsWith("//")) candidate = "https:$candidate"
             if (candidate.startsWith("/")) candidate = absolute(candidate, baseUrl)
             if (!candidate.startsWith("http")) return
+            if (isJunk(candidate)) return
             val kind = directKind(candidate) ?: return
             found.putIfAbsent(candidate, MediaCandidate(candidate, label, mimeFor(candidate), kind))
         }
@@ -187,26 +206,10 @@ class MediaExtractor @Inject constructor() {
         VIDEO_SRC.findAll(html).forEach { add(it.groupValues[1]) }
         // Player JSON keys used across platforms and file hosts.
         JSON_MEDIA.findAll(html).forEach { add(it.groupValues[1]) }
-        // kt_player / KVS pages: scrambled links plus a license code.
-        kvs(html, title).forEach { found.putIfAbsent(it.url, it) }
         // Raw media links anywhere in the document (players, JSON blobs).
         RAW_MEDIA.findAll(html).forEach { add(unescape(it.value)) }
 
         return found.values.take(10).toList()
-    }
-
-    private fun kvs(html: String, title: String): List<MediaCandidate> {
-        val license = LICENSE_CODE.find(html)?.groupValues?.get(1).orEmpty()
-        return KVS_URL.findAll(html).mapNotNull { match ->
-            val raw = unescape(match.groupValues[2])
-            val resolved = if (raw.startsWith("function/0/")) {
-                KvsPlayer.decode(raw, license)
-            } else {
-                KvsPlayer.decode(raw, license) ?: raw
-            } ?: return@mapNotNull null
-            val kind = directKind(resolved) ?: "VIDEO"
-            MediaCandidate(resolved, title, mimeFor(resolved), kind)
-        }.toList()
     }
 
     private data class Page(val body: String, val mediaType: String)
@@ -237,6 +240,12 @@ class MediaExtractor @Inject constructor() {
         url.startsWith("www.") -> "https://$url"
         url.contains('.') && !url.contains(' ') -> "https://$url"
         else -> url
+    }
+
+    /** Skips teasers, sprites and ad creatives that are not the real stream. */
+    private fun isJunk(url: String): Boolean {
+        val clean = url.substringBefore('?').lowercase()
+        return JUNK.any { it in clean }
     }
 
     private fun directKind(url: String): String? {
@@ -297,11 +306,8 @@ class MediaExtractor @Inject constructor() {
             "\"(?:contentUrl|playbackUrl|progressiveUrl|hlsUrl|hlsManifestUrl|videoUrl|video_url|media_url|streamUrl|file|src)\"\\s*:\\s*\"([^\"]+)\"",
             RegexOption.IGNORE_CASE,
         )
-        val KVS_URL = Regex(
-            "(video_url|video_alt_url\\d*|video_url_text)\\s*:\\s*'([^']+)'",
-            RegexOption.IGNORE_CASE,
-        )
-        val LICENSE_CODE = Regex("license_code\\s*:\\s*'([^']+)'", RegexOption.IGNORE_CASE)
+        val JUNK = listOf("preview", "thumb", "sprite", "timeline", "trailer", "advert", "/ads/")
+        val KVS_MARKER = Regex("license_code\\s*:|function/0/", RegexOption.IGNORE_CASE)
         val RAW_MEDIA = Regex("https?://[^\\s\"'<>\\\\]+?\\.(?:mp4|webm|m4v|mp3|m4a|flac|m3u8)(?:\\?[^\\s\"'<>\\\\]*)?")
         val VIDEO_EXT = listOf(".mp4", ".webm", ".m4v", ".mov", ".mkv")
         val AUDIO_EXT = listOf(".mp3", ".m4a", ".ogg", ".oga", ".wav", ".flac")

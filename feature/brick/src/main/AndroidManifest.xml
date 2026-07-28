@@ -49,13 +49,25 @@
             android:noHistory="true"
             android:taskAffinity="com.lifeos.brick.nfc"
             android:theme="@style/Theme.LifeOs">
+            <!--
+              Preferred route: tags Brick programmed carry this MIME record plus
+              an Android Application Record, so a tap reaches LifeOS even with
+              the app closed and no chooser appears.
+            -->
             <intent-filter>
                 <action android:name="android.nfc.action.NDEF_DISCOVERED" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/vnd.lifeos.brick" />
             </intent-filter>
+            <!-- Tags written by other tools (plain text records) still work. -->
+            <intent-filter>
+                <action android:name="android.nfc.action.NDEF_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.nfc.action.TECH_DISCOVERED" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
             <!--
               Last-resort filter: plain tags whose NDEF mime does not match and

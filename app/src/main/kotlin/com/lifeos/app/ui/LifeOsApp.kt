@@ -69,7 +69,14 @@ fun LifeOsApp(captureRequests: Int = 0, navBarIds: List<String> = emptyList()) {
     // tabs in their chosen ORDER (the stored list is ordered).
     val barItems = remember(navBarIds) {
         if (navBarIds.isEmpty()) {
-            TopLevelDestination.entries.toList()
+            // Default four tabs; Settings can swap in any other module.
+            listOf(
+                TopLevelDestination.HOME,
+                TopLevelDestination.CALENDAR,
+                TopLevelDestination.TASKS,
+                TopLevelDestination.INBOX,
+                TopLevelDestination.ASSISTANT,
+            )
         } else {
             listOf(TopLevelDestination.HOME) +
                 navBarIds.mapNotNull { id ->

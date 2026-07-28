@@ -11,8 +11,8 @@ data class SupportedSite(
 /**
  * Curated catalogue of sites the on-device extractor handles, grouped so the
  * module can show what is worth pasting. Everything here is reached with the
- * generic extractor plus the site helpers in [MediaExtractor] - no external
- * service, no API keys, no accounts.
+ * generic extractor, the site helpers in [MediaExtractor] or the offscreen
+ * [PlayerResolver] - no external service, no API keys, no accounts.
  *
  * Sites needing a logged-in session (private posts, paid courses) are listed
  * with that caveat instead of being silently omitted.
@@ -88,7 +88,7 @@ object SiteCatalog {
         SupportedSite("Upstream", "upstream.to", "File host", "HLS"),
 
         // ---- Adult (kt_player / KVS family and friends) ---------------------
-        SupportedSite("ThisVid", "thisvid.com", "Adult", "KVS player links decoded on-device"),
+        SupportedSite("ThisVid", "thisvid.com", "Adult", "Resolved by the offscreen player (session-bound links)"),
         SupportedSite("xHamster", "xhamster.com", "Adult", "Direct mp4/HLS"),
         SupportedSite("XVideos", "xvideos.com", "Adult", "Direct mp4/HLS"),
         SupportedSite("Pornhub", "pornhub.com", "Adult", "Direct mp4"),
@@ -97,7 +97,7 @@ object SiteCatalog {
         SupportedSite("Eporner", "eporner.com", "Adult", "Direct mp4"),
         SupportedSite("Redgifs", "redgifs.com", "Adult", "Direct mp4"),
         SupportedSite("Motherless", "motherless.com", "Adult", "Direct mp4"),
-        SupportedSite("KVS tube sites", "kt_player", "Adult", "Any site using the kt_player script"),
+        SupportedSite("KVS tube sites", "kt_player", "Adult", "Any kt_player site, via the offscreen player"),
     )
 
     val categories: List<String> = sites.map { it.category }.distinct()
