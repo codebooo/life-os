@@ -57,6 +57,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lifeos.core.designsystem.component.SectionHeader
 import com.lifeos.core.designsystem.theme.PALETTE_DYNAMIC
 import com.lifeos.core.designsystem.theme.ThemePalettes
+import com.lifeos.core.ui.navigation.TopLevelDestination
 
 /** Central settings (§8.4 onboarding grants + endpoints in one place). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -130,13 +131,10 @@ fun SettingsRoute(
             )
 
             SectionHeader(title = "Navigation bar")
-            val navLabels = mapOf(
-                "CALENDAR" to "Calendar",
-                "TASKS" to "Tasks",
-                "INBOX" to "Inbox",
-                "ASSISTANT" to "Jarvis",
-            )
-            // Enabled tabs first (orderable), then disabled ones to re-enable.
+            // Every module can be a tab; Home stays pinned as the first slot.
+            val navLabels = TopLevelDestination.entries
+                .filter { it != TopLevelDestination.HOME }
+                .associate { it.name to it.label }
             uiState.navBarItems.forEachIndexed { index, id ->
                 ReorderRow(
                     label = navLabels[id] ?: id,
@@ -148,23 +146,43 @@ fun SettingsRoute(
                     onToggle = { viewModel.onEvent(SettingsUiEvent.ToggleNavItem(id)) },
                 )
             }
-            navLabels.keys.filter { it !in uiState.navBarItems }.forEach { id ->
-                ReorderRow(
-                    label = navLabels[id] ?: id,
-                    enabled = false,
-                    canMoveUp = false,
-                    canMoveDown = false,
-                    onMoveUp = {},
-                    onMoveDown = {},
-                    onToggle = { viewModel.onEvent(SettingsUiEvent.ToggleNavItem(id)) },
-                )
-            }
             Text(
-                "Toggle tabs and order them with the arrows — Home stays pinned first. " +
+                "Toggle tabs and order them with the arrows - Home stays pinned first. " +
                     "Everything stays reachable from the Home grid.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            var navSearch by remember { mutableStateOf("") }
+            var showNavPicker by remember { mutableStateOf(false) }
+            Button(onClick = { showNavPicker = !showNavPicker }) {
+                Text(if (showNavPicker) "Done adding tabs" else "Add a module as a tab")
+            }
+            if (showNavPicker) {
+                OutlinedTextField(
+                    value = navSearch,
+                    onValueChange = { navSearch = it },
+                    label = { Text("Search modules") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                navLabels.entries
+                    .filter { (id, label) ->
+                        id !in uiState.navBarItems &&
+                            (navSearch.isBlank() || label.contains(navSearch.trim(), ignoreCase = true))
+                    }
+                    .forEach { (id, label) ->
+                        ReorderRow(
+                            label = label,
+                            enabled = false,
+                            canMoveUp = false,
+                            canMoveDown = false,
+                            onMoveUp = {},
+                            onMoveDown = {},
+                            onToggle = { viewModel.onEvent(SettingsUiEvent.ToggleNavItem(id)) },
+                        )
+                    }
+            }
 
             SectionHeader(title = "AI")
             OutlinedTextField(

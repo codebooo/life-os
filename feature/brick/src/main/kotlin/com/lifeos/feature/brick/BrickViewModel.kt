@@ -133,12 +133,23 @@ class BrickViewModel @Inject constructor(
 
     fun startTagPairing() { _pairingTag.value = true }
 
-    /** Called by the screen when a tag is read while the editor is pairing. */
-    fun onTagPaired(tagId: String) {
+    /**
+     * Called by the screen when a tag is read while the editor is pairing.
+     *
+     * @param programmed whether the Brick record could be written onto the tag.
+     *   Without it, taps only register while LifeOS is open, so the difference
+     *   is worth telling the user about.
+     */
+    fun onTagPaired(tagId: String, programmed: Result<Unit>) {
         val normalized = tagId.trim().uppercase()
         _pairingTag.value = false
         updateDraft { it.copy(nfcTagId = normalized, activator = "NFC", deactivator = "NFC") }
-        _message.value = "Tag $normalized paired — remember to Save"
+        _message.value = if (programmed.isSuccess) {
+            "Tag $normalized paired and programmed - taps work with LifeOS closed. Remember to Save"
+        } else {
+            "Tag $normalized paired by serial - taps only register with LifeOS open " +
+                "(${programmed.exceptionOrNull()?.message ?: "could not write to the tag"}). Remember to Save"
+        }
     }
 
     /**

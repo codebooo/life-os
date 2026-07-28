@@ -41,22 +41,20 @@ import com.lifeos.core.database.downloads.DownloadDao
 import com.lifeos.core.designsystem.component.EmptyState
 import com.lifeos.feature.downloader.data.DownloadEngine
 import com.lifeos.feature.downloader.data.MediaCandidate
-import com.lifeos.feature.downloader.data.MediaExtractor
+import com.lifeos.feature.downloader.data.MediaResolver
 import com.lifeos.feature.downloader.data.SiteCatalog
 import com.lifeos.feature.downloader.data.SupportedSite
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
 class DownloaderViewModel @Inject constructor(
-    private val extractor: MediaExtractor,
+    private val resolver: MediaResolver,
     private val engine: DownloadEngine,
     private val downloadDao: DownloadDao,
 ) : ViewModel() {
@@ -82,11 +80,18 @@ class DownloaderViewModel @Inject constructor(
             _busy.value = true
             _message.value = null
             _candidates.value = emptyList()
-            val result = withContext(Dispatchers.IO) { runCatching { extractor.extract(target) } }
+            val result = runCatching { resolver.resolve(target) }
             _busy.value = false
-            result.onSuccess { found ->
-                _candidates.value = found
-                if (found.isEmpty()) _message.value = "No downloadable media found on that page."
+            result.onSuccess { outcome ->
+                _candidates.value = outcome.candidates
+                _message.value = when {
+                    outcome.candidates.isEmpty() ->
+                        "No downloadable media found on that page."
+                    outcome.usedPlayer ->
+                        "Resolved with the in-app player - links are tied to this session, " +
+                            "so download them now."
+                    else -> null
+                }
             }.onFailure { _message.value = it.message ?: "Couldn't reach that URL." }
         }
     }

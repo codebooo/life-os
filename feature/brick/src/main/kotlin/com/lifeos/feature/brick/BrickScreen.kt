@@ -1,6 +1,7 @@
 package com.lifeos.feature.brick
 
 import android.app.Activity
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -59,6 +60,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.lifeos.core.database.brick.BrickProfileEntity
 import com.lifeos.core.designsystem.component.EmptyState
 import com.lifeos.feature.brick.nfc.BrickReader
+import com.lifeos.feature.brick.nfc.BrickTagWriter
+import com.lifeos.feature.brick.nfc.uid
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -98,9 +101,20 @@ fun BrickRoute(viewModel: BrickViewModel = hiltViewModel()) {
     // Reader mode stays on the whole time Brick is open: while pairing a tag it
     // captures the id, otherwise a tap flips the matching mode right here.
     // (Outside the app, the manifest's NFC filters route taps to BrickNfcActivity.)
+    val appContext = LocalContext.current
+    val nfcReady = remember(appContext) {
+        android.nfc.NfcAdapter.getDefaultAdapter(appContext)?.isEnabled != false
+    }
     BrickReaderEffect(
-        onUid = { uid ->
-            if (viewModel.pairingTag.value) viewModel.onTagPaired(uid) else viewModel.onTagTapped(uid)
+        onTag = { tag ->
+            val uid = tag.uid() ?: return@BrickReaderEffect
+            if (viewModel.pairingTag.value) {
+                // Pairing also programs the tag, which is what makes taps work
+                // with LifeOS closed.
+                viewModel.onTagPaired(uid, BrickTagWriter.write(tag, uid, appContext.packageName))
+            } else {
+                viewModel.onTagTapped(uid)
+            }
         },
     )
 
@@ -137,6 +151,32 @@ fun BrickRoute(viewModel: BrickViewModel = hiltViewModel()) {
                             Button(onClick = { viewModel.openAccessibilitySettings() }) {
                                 Text("Open accessibility settings")
                             }
+                        }
+                    }
+                }
+            }
+
+            if (!nfcReady) {
+                item {
+                    Card {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("NFC is off", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "Turn NFC on to pair a tag and to flip modes by tapping it. Android only " +
+                                    "dispatches tags while the screen is unlocked, so a tap wakes nothing " +
+                                    "from a locked phone.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Button(
+                                onClick = {
+                                    runCatching {
+                                        appContext.startActivity(
+                                            Intent(android.provider.Settings.ACTION_NFC_SETTINGS),
+                                        )
+                                    }
+                                },
+                            ) { Text("Open NFC settings") }
                         }
                     }
                 }
@@ -233,6 +273,7 @@ private fun ProfileEditor(viewModel: BrickViewModel, snackbarHostState: Snackbar
     val apps by viewModel.apps.collectAsState()
     val pairing by viewModel.pairingTag.collectAsState()
     val current = draft ?: return
+    val nfcSettingsContext = LocalContext.current
     var query by remember { mutableStateOf("") }
     var showAllApps by remember { mutableStateOf(false) }
 
@@ -302,14 +343,30 @@ private fun ProfileEditor(viewModel: BrickViewModel, snackbarHostState: Snackbar
                                 )
                             }
                             Text(
-                                if (pairing) "Hold the tag against the back of the phone…"
-                                else "Any NFC tag or card works — one tap flips this mode on and off. " +
-                                    "Tap it here any time to test.",
+                                if (pairing) {
+                                    "Hold the tag against the back of the phone. LifeOS also writes a " +
+                                        "small record onto it so taps work with the app closed."
+                                } else {
+                                    "Any writable NFC tag works. Pairing programs the tag, so a tap flips " +
+                                        "this mode from anywhere - no need to open LifeOS first. The screen " +
+                                        "does have to be unlocked; Android never dispatches tags while locked."
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            OutlinedButton(onClick = { viewModel.startTagPairing() }, enabled = !pairing) {
-                                Text(if (current.nfcTagId == null) "Pair tag" else "Pair a different tag")
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(onClick = { viewModel.startTagPairing() }, enabled = !pairing) {
+                                    Text(if (current.nfcTagId == null) "Pair tag" else "Pair a different tag")
+                                }
+                                OutlinedButton(
+                                    onClick = {
+                                        runCatching {
+                                            nfcSettingsContext.startActivity(
+                                                Intent(android.provider.Settings.ACTION_NFC_SETTINGS),
+                                            )
+                                        }
+                                    },
+                                ) { Text("NFC settings") }
                             }
                         }
                     }
@@ -478,14 +535,14 @@ private fun MinuteField(label: String, minuteOfDay: Int?, onChange: (Int?) -> Un
  * when the screen goes away so the system's normal tag dispatch takes over again.
  */
 @Composable
-private fun BrickReaderEffect(onUid: (String) -> Unit) {
+private fun BrickReaderEffect(onTag: (android.nfc.Tag) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val activity = context as? Activity ?: return@DisposableEffect onDispose {}
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> BrickReader.start(activity) { uid -> onUid(uid); true }
+                Lifecycle.Event.ON_RESUME -> BrickReader.startForTag(activity) { tag -> onTag(tag); true }
                 Lifecycle.Event.ON_PAUSE -> BrickReader.stop(activity)
                 else -> Unit
             }
