@@ -1,61 +1,63 @@
 package com.lifeos.app.ui.screen
 
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.NightsStay
-import androidx.compose.material.icons.automirrored.filled.Note
-import androidx.compose.material.icons.filled.Insights
-import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Navigation
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.DocumentScanner
-import androidx.compose.material.icons.filled.LocalShipping
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material.icons.filled.Timeline
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.LocalFlorist
-import androidx.compose.material.icons.filled.Newspaper
-import androidx.compose.material.icons.filled.Shield
-import androidx.compose.material.icons.filled.Timelapse
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
-import kotlinx.coroutines.withTimeoutOrNull
-import androidx.compose.material3.ListItem
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.Note
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.DocumentScanner
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Insights
+import androidx.compose.material.icons.filled.LocalFlorist
+import androidx.compose.material.icons.filled.LocalShipping
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Newspaper
+import androidx.compose.material.icons.filled.NightsStay
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Timelapse
+import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material3.Card
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import com.lifeos.core.designsystem.component.smoothSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
@@ -65,11 +67,13 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.round
 import androidx.compose.ui.zIndex
-import androidx.compose.runtime.getValue
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.lifeos.core.designsystem.component.FadeVisible
+import com.lifeos.core.designsystem.component.smoothSize
 import com.lifeos.core.ui.navigation.LifeDestination
 import com.lifeos.feature.planner.PlannerViewModel
+import kotlinx.coroutines.withTimeoutOrNull
 
 private data class AppGridItem(
     val label: String,
@@ -262,11 +266,7 @@ fun HomeScreen(
                         }
                     },
                 )
-                androidx.compose.animation.AnimatedVisibility(
-                    visible = vaultRevealed,
-                    enter = androidx.compose.animation.scaleIn() + androidx.compose.animation.fadeIn(),
-                    exit = androidx.compose.animation.scaleOut() + androidx.compose.animation.fadeOut(),
-                ) {
+                FadeVisible(visible = vaultRevealed) {
                     IconButton(onClick = { onNavigate(LifeDestination.Vault) }) {
                         Icon(Icons.Filled.Lock, contentDescription = "Vault", tint = MaterialTheme.colorScheme.primary)
                     }
@@ -349,6 +349,24 @@ private fun ReorderableTileGrid(
         IntRect(info.offset, info.size).contains(position.round())
     }
 
+    // Auto-scroll while a tile is held near the top or bottom edge, so a long
+    // reorder does not need drag-release-drag again.
+    var edgeScroll by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(draggingKey) {
+        if (draggingKey == null) {
+            edgeScroll = 0f
+            return@LaunchedEffect
+        }
+        while (draggingKey != null) {
+            if (edgeScroll != 0f) {
+                gridState.scrollBy(edgeScroll)
+                // Keep the tile pinned under the finger while the list moves.
+                dragOffset += Offset(0f, edgeScroll)
+            }
+            withFrameNanos { }
+        }
+    }
+
     LazyVerticalGrid(
         state = gridState,
         columns = if (listLayout) GridCells.Fixed(1) else GridCells.Adaptive(minSize = 160.dp),
@@ -366,6 +384,16 @@ private fun ReorderableTileGrid(
                 onDrag = { change, amount ->
                     change.consume()
                     dragOffset += amount
+                    // Distance from the viewport edges decides the scroll speed.
+                    val viewportHeight = gridState.layoutInfo.viewportSize.height.toFloat()
+                    val pointerY = change.position.y
+                    val zone = (viewportHeight * 0.18f).coerceAtLeast(72f)
+                    edgeScroll = when {
+                        pointerY < zone -> -((zone - pointerY) / zone) * MAX_EDGE_SCROLL
+                        pointerY > viewportHeight - zone ->
+                            ((pointerY - (viewportHeight - zone)) / zone) * MAX_EDGE_SCROLL
+                        else -> 0f
+                    }
                     val key = draggingKey ?: return@detectDragGesturesAfterLongPress
                     val dragged = gridState.layoutInfo.visibleItemsInfo
                         .firstOrNull { it.key == key } ?: return@detectDragGesturesAfterLongPress
@@ -390,11 +418,13 @@ private fun ReorderableTileGrid(
                 onDragEnd = {
                     draggingKey = null
                     dragOffset = Offset.Zero
+                    edgeScroll = 0f
                     onOrderChanged(order.map { it.label })
                 },
                 onDragCancel = {
                     draggingKey = null
                     dragOffset = Offset.Zero
+                    edgeScroll = 0f
                 },
             )
         },
@@ -442,3 +472,6 @@ private fun ReorderableTileGrid(
         }
     }
 }
+
+/** Pixels per frame at the very edge of the viewport while reordering tiles. */
+private const val MAX_EDGE_SCROLL = 18f

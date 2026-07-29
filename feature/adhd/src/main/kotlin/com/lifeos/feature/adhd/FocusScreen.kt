@@ -6,6 +6,7 @@ import android.os.VibrationEffect
 import android.os.VibratorManager
 import android.provider.Settings
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,9 +16,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -42,20 +44,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lifeos.core.designsystem.component.EmptyState
+import com.lifeos.core.designsystem.component.FadeThrough
+import com.lifeos.feature.adhd.data.FocusTimerController
 import com.lifeos.feature.adhd.overlay.OverwhelmOverlayService
 import com.lifeos.feature.adhd.overlay.TimerOverlayService
-import kotlinx.coroutines.delay
 import java.text.DateFormat
 import java.util.Date
+import kotlinx.coroutines.delay
 
 /** ADHD tools (§Module 5): visual focus timer, streaks, overwhelm overlay. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,53 +87,35 @@ fun FocusRoute(viewModel: FocusViewModel = hiltViewModel()) {
                     )
                 }
             }
-            when (uiState.tab) {
-                0 -> TimerTab(onFinished = { minutes, completed ->
-                    viewModel.onEvent(FocusUiEvent.SessionFinished(minutes, completed))
-                })
-                1 -> StreaksTab(uiState)
-                else -> OverwhelmTab()
+            FadeThrough(targetState = uiState.tab, label = "focus-tab") { tab ->
+                when (tab) {
+                    0 -> TimerTab(viewModel.timerController)
+                    1 -> StreaksTab(uiState)
+                    else -> OverwhelmTab()
+                }
             }
         }
     }
 }
 
+/**
+ * Focus timer (§Module 5). All state lives in [FocusTimerController], so the
+ * countdown keeps running across tabs, Home and app switches. Tap the time in
+ * the middle of the ring to edit it right there - no dialog.
+ */
 @Composable
-private fun TimerTab(onFinished: (minutes: Int, completed: Boolean) -> Unit) {
+private fun TimerTab(controller: FocusTimerController) {
     val context = LocalContext.current
-    // Total duration in seconds and the running remaining seconds are kept apart
-    // so a custom time survives a reset. Default 25 min.
-    var totalSeconds by remember { mutableIntStateOf(25 * 60) }
-    var remainingSeconds by remember { mutableIntStateOf(25 * 60) }
-    var running by remember { mutableStateOf(false) }
-    var showCustom by remember { mutableStateOf(false) }
-    var overlayOn by remember { mutableStateOf(false) }
+    val timer by controller.state.collectAsStateWithLifecycle()
+    var editing by remember { mutableStateOf(false) }
+    var draft by remember { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
 
-    // Absolute deadline drives both the on-screen ring AND the OS overlay so they
-    // never drift apart while the overlay is up.
-    fun startOverlayIfOn() {
-        if (overlayOn) {
-            TimerOverlayService.show(
-                context,
-                android.os.SystemClock.elapsedRealtime() + remainingSeconds * 1000L,
-                totalSeconds * 1000L,
-            )
-        }
-    }
-
-    LaunchedEffect(running) {
-        while (running && remainingSeconds > 0) {
-            delay(1_000)
-            remainingSeconds -= 1
-        }
-        if (running && remainingSeconds == 0) {
-            running = false
-            onFinished(totalSeconds / 60, true)
-            TimerOverlayService.hide(context)
-            overlayOn = false
-            val vibrator = (context.getSystemService(VibratorManager::class.java)).defaultVibrator
-            vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 200, 100, 200, 100, 400), -1))
-        }
+    fun commit() {
+        parseClock(draft)?.let { controller.setTotal(it) }
+        editing = false
+        keyboard?.hide()
     }
 
     Column(
@@ -133,56 +126,70 @@ private fun TimerTab(onFinished: (minutes: Int, completed: Boolean) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
-            val progress = if (totalSeconds == 0) 0f else remainingSeconds / (totalSeconds.toFloat())
+            val progress = if (timer.totalSeconds == 0) {
+                0f
+            } else {
+                timer.remainingSeconds / timer.totalSeconds.toFloat()
+            }
             val track = MaterialTheme.colorScheme.surfaceVariant
             val bar = MaterialTheme.colorScheme.primary
-            Canvas(
-                modifier = Modifier
-                    .size(240.dp)
-                    // Tap inside the ring to set a custom time.
-                    .pointerInput(Unit) { detectTapGestures { showCustom = true } },
-            ) {
+            Canvas(modifier = Modifier.size(240.dp)) {
                 drawArc(track, -90f, 360f, false, style = Stroke(width = 28f, cap = StrokeCap.Round))
                 drawArc(bar, -90f, 360f * progress, false, style = Stroke(width = 28f, cap = StrokeCap.Round))
             }
-            Text(
-                formatClock(remainingSeconds),
-                style = MaterialTheme.typography.displayMedium,
-            )
+            if (editing) {
+                // Editing happens in place: the clock in the middle becomes the field.
+                BasicTextField(
+                    value = draft,
+                    onValueChange = { input -> draft = input.filter { it.isDigit() || it == ':' }.take(8) },
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.displayMedium.copy(
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                    ),
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { commit() }),
+                    modifier = Modifier
+                        .width(180.dp)
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { if (!it.isFocused && editing) commit() },
+                )
+                LaunchedEffect(Unit) { focusRequester.requestFocus() }
+            } else {
+                Text(
+                    formatClock(timer.remainingSeconds),
+                    style = MaterialTheme.typography.displayMedium,
+                    modifier = Modifier.pointerInput(timer.remainingSeconds) {
+                        detectTapGestures {
+                            draft = formatClock(timer.remainingSeconds)
+                            editing = true
+                        }
+                    },
+                )
+            }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(5, 15, 25, 45).forEach { preset ->
                 FilterChip(
-                    selected = !running && totalSeconds == preset * 60,
-                    onClick = {
-                        totalSeconds = preset * 60
-                        remainingSeconds = preset * 60
-                        running = false
-                    },
+                    selected = !timer.running && timer.totalSeconds == preset * 60,
+                    onClick = { controller.setTotal(preset * 60) },
                     label = { Text("${preset}m") },
                 )
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(
-                onClick = {
-                    running = !running
-                    if (running) startOverlayIfOn()
-                },
-                enabled = remainingSeconds > 0,
-            ) { Text(if (running) "Pause" else "Start") }
+                onClick = { controller.toggle() },
+                enabled = timer.remainingSeconds > 0,
+            ) { Text(if (timer.running) "Pause" else "Start") }
+            OutlinedButton(onClick = { controller.reset() }) { Text("Reset") }
             OutlinedButton(
                 onClick = {
-                    if (running || remainingSeconds < totalSeconds) onFinished(totalSeconds / 60, false)
-                    running = false
-                    remainingSeconds = totalSeconds
-                    TimerOverlayService.hide(context)
-                    overlayOn = false
-                },
-            ) { Text("Reset") }
-            OutlinedButton(
-                onClick = {
-                    if (!overlayOn && !Settings.canDrawOverlays(context)) {
+                    if (!timer.overlayVisible && !Settings.canDrawOverlays(context)) {
                         context.startActivity(
                             Intent(
                                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -191,81 +198,37 @@ private fun TimerTab(onFinished: (minutes: Int, completed: Boolean) -> Unit) {
                         )
                         return@OutlinedButton
                     }
-                    overlayOn = !overlayOn
-                    if (overlayOn) startOverlayIfOn() else TimerOverlayService.hide(context)
+                    controller.setOverlayVisible(!timer.overlayVisible)
                 },
-            ) { Text(if (overlayOn) "Hide overlay" else "Overlay") }
+            ) { Text(if (timer.overlayVisible) "Hide overlay" else "Overlay") }
         }
         Text(
-            "Tap inside the ring to set a custom time. Overlay floats the ring over any app.",
+            "Tap the time to type a new one. The timer keeps running when you leave this tab or the app. " +
+                "The overlay floats the ring over anything - drag it around, pinch to resize.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-
-    if (showCustom) {
-        CustomTimeDialog(
-            initialSeconds = totalSeconds,
-            onDismiss = { showCustom = false },
-            onConfirm = { seconds ->
-                totalSeconds = seconds.coerceAtLeast(1)
-                remainingSeconds = totalSeconds
-                running = false
-                showCustom = false
-            },
         )
     }
 }
 
 private fun formatClock(seconds: Int): String =
-    if (seconds >= 3600) "%d:%02d:%02d".format(seconds / 3600, (seconds % 3600) / 60, seconds % 60)
-    else "%02d:%02d".format(seconds / 60, seconds % 60)
+    if (seconds >= 3600) {
+        "%d:%02d:%02d".format(seconds / 3600, (seconds % 3600) / 60, seconds % 60)
+    } else {
+        "%02d:%02d".format(seconds / 60, seconds % 60)
+    }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CustomTimeDialog(
-    initialSeconds: Int,
-    onDismiss: () -> Unit,
-    onConfirm: (Int) -> Unit,
-) {
-    var hours by remember { mutableStateOf((initialSeconds / 3600).toString().takeIf { it != "0" } ?: "") }
-    var minutes by remember { mutableStateOf(((initialSeconds % 3600) / 60).toString()) }
-    var seconds by remember { mutableStateOf((initialSeconds % 60).toString()) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Set timer") },
-        text = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TimeField(hours, "HH") { hours = it }
-                Text(":")
-                TimeField(minutes, "MM") { minutes = it }
-                Text(":")
-                TimeField(seconds, "SS") { seconds = it }
-            }
-        },
-        confirmButton = {
-            Button(onClick = {
-                val h = hours.toIntOrNull() ?: 0
-                val m = minutes.toIntOrNull() ?: 0
-                val s = seconds.toIntOrNull() ?: 0
-                onConfirm(h * 3600 + m * 60 + s)
-            }) { Text("Set") }
-        },
-        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("Cancel") } },
-    )
-}
-
-@Composable
-private fun TimeField(value: String, label: String, onChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = { input -> onChange(input.filter { it.isDigit() }.take(2)) },
-        placeholder = { Text(label) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = Modifier.width(76.dp),
-    )
+/** Accepts "25", "25:00" and "1:05:00". */
+private fun parseClock(text: String): Int? {
+    val parts = text.split(':').map { it.trim() }.filter { it.isNotEmpty() }
+    if (parts.isEmpty()) return null
+    val numbers = parts.map { it.toIntOrNull() ?: return null }
+    val seconds = when (numbers.size) {
+        1 -> numbers[0] * 60
+        2 -> numbers[0] * 60 + numbers[1]
+        else -> numbers[0] * 3600 + numbers[1] * 60 + numbers[2]
+    }
+    return seconds.takeIf { it > 0 }
 }
 
 @Composable

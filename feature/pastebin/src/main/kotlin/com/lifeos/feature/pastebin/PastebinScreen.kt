@@ -175,8 +175,7 @@ private fun ComposerTab(state: PastebinUiState, viewModel: PastebinViewModel) {
                 Column(modifier = Modifier.padding(start = 8.dp)) {
                     Text("Burn after read")
                     Text(
-                        "Deleted the moment it is opened once. Pastebin only allows this on guest pastes, " +
-                            "so a burner paste is posted outside your account.",
+                        "Deleted the moment it is opened once.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -191,6 +190,34 @@ private fun ComposerTab(state: PastebinUiState, viewModel: PastebinViewModel) {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+        }
+        item {
+            // Pastebin's API has neither burn-after-read nor passwords, so those
+            // requests go to PrivateBin. Say which one will be used, up front.
+            val burner = state.burnAfterRead || state.password.isNotBlank()
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        if (burner) "Goes to PrivateBin" else "Goes to Pastebin",
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                    Text(
+                        if (burner) {
+                            "Burn-after-read and passwords do not exist in Pastebin's API, so this one is " +
+                                "created on PrivateBin instead: encrypted on this phone, the key travels in " +
+                                "the link, and the server only ever holds ciphertext."
+                        } else {
+                            if (state.signedIn) {
+                                "Posted under your account, so it shows up in My pastes."
+                            } else {
+                                "Posted as a guest. Sign in on the My pastes tab to keep them in your account."
+                            }
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
         }
         item {
             if (state.posting) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -367,6 +394,24 @@ private fun SettingsTab(state: PastebinUiState, viewModel: PastebinViewModel) {
                 label = { Text("Password for shared pastes (optional)") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item { Text("Burner backend", style = MaterialTheme.typography.labelLarge) }
+        item {
+            OutlinedTextField(
+                value = state.privateBinInstance,
+                onValueChange = viewModel::onPrivateBinInstance,
+                label = { Text("PrivateBin instance") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        item {
+            Text(
+                "Burn-after-read and password-protected pastes are created here instead of on Pastebin, " +
+                    "which has neither in its API. Any PrivateBin instance works - your own included.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

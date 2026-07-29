@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import com.lifeos.core.common.viewmodel.LifeViewModel
 import com.lifeos.core.database.adhd.FocusDao
 import com.lifeos.core.database.adhd.FocusSessionEntity
+import com.lifeos.feature.adhd.data.FocusTimerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -27,6 +28,8 @@ sealed interface FocusUiEffect
 @HiltViewModel
 class FocusViewModel @Inject constructor(
     private val focusDao: FocusDao,
+    /** Shared so the countdown outlives this screen (§Module 5). */
+    val timerController: FocusTimerController,
 ) : LifeViewModel<FocusUiState, FocusUiEvent, FocusUiEffect>(FocusUiState()) {
 
     init {

@@ -11,5 +11,6 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.mediapipe.tasks.genai)
+    implementation(libs.mediapipe.tasks.vision)
     testImplementation(libs.turbine)
 }

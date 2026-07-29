@@ -32,6 +32,8 @@ data class ChatUiState(
     val showSettings: Boolean = false,
     /** Manual context (notes, pasted files) attached to every prompt. */
     val contextText: String = "",
+    /** Images attached to the next message (vision models read them). */
+    val pendingImages: List<String> = emptyList(),
     val showContext: Boolean = false,
     /** Developer Options: show Jarvis internals + a copy-debug button. */
     val debugEnabled: Boolean = false,
@@ -50,6 +52,9 @@ sealed interface ChatUiEvent {
     data class ContextChanged(val value: String) : ChatUiEvent
     /** File picked from the document picker — appended to the context. */
     data class ContextFileAttached(val name: String, val content: String) : ChatUiEvent
+    /** Image picked from the gallery, already copied into app storage. */
+    data class ImageAttached(val path: String) : ChatUiEvent
+    data class ImageRemoved(val path: String) : ChatUiEvent
     data object DismissError : ChatUiEvent
 }
 
@@ -110,6 +115,12 @@ class ChatViewModel @Inject constructor(
                     },
                 )
             }
+            is ChatUiEvent.ImageAttached -> updateState {
+                it.copy(pendingImages = (it.pendingImages + event.path).takeLast(2))
+            }
+            is ChatUiEvent.ImageRemoved -> updateState {
+                it.copy(pendingImages = it.pendingImages - event.path)
+            }
             ChatUiEvent.DismissError -> updateState { it.copy(error = null) }
         }
     }
@@ -127,7 +138,9 @@ class ChatViewModel @Inject constructor(
 
     private fun send() {
         val typed = uiState.value.input.trim()
-        if (typed.isEmpty() || uiState.value.streaming) return
+        val images = uiState.value.pendingImages
+        // An image on its own is a valid question ("what is this?").
+        if ((typed.isEmpty() && images.isEmpty()) || uiState.value.streaming) return
 
         // Manual context rides along visibly — no hidden prompt surgery.
         val context = uiState.value.contextText.trim()
@@ -137,9 +150,13 @@ class ChatViewModel @Inject constructor(
             "[Context]\n$context\n[/Context]\n\n$typed"
         }
 
-        updateState { it.copy(input = "", streaming = true, error = null) }
+        updateState { it.copy(input = "", streaming = true, error = null, pendingImages = emptyList()) }
         sendJob = viewModelScope.launch {
-            chatRepository.sendMessage(uiState.value.activeConversationId, text)
+            chatRepository.sendMessage(
+                conversationId = uiState.value.activeConversationId,
+                text = text.ifBlank { "What is in this image?" },
+                imagePaths = images,
+            )
                 .collect { progress ->
                     when (progress) {
                         is ReplyProgress.Started -> {

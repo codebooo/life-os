@@ -28,7 +28,7 @@ import com.lifeos.app.ui.settings.SettingsRoute
 import com.lifeos.core.ui.navigation.LifeDestination
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
+import com.lifeos.core.designsystem.component.FadeVisible
 import com.lifeos.core.designsystem.component.LifeMotion
 import com.lifeos.core.ui.navigation.TopLevelDestination
 import com.lifeos.feature.adhd.FocusRoute
@@ -98,11 +98,7 @@ fun LifeOsApp(captureRequests: Int = 0, navBarIds: List<String> = emptyList()) {
         modifier = Modifier.fillMaxSize(),
         floatingActionButton = {
             // Quick capture lives on Home only; feature screens own their create FABs.
-            androidx.compose.animation.AnimatedVisibility(
-                visible = currentDestination?.hasRoute(LifeDestination.Home::class) == true,
-                enter = androidx.compose.animation.scaleIn() + androidx.compose.animation.fadeIn(),
-                exit = androidx.compose.animation.scaleOut() + androidx.compose.animation.fadeOut(),
-            ) {
+            FadeVisible(visible = currentDestination?.hasRoute(LifeDestination.Home::class) == true) {
                 FloatingActionButton(onClick = { showQuickCapture = true }) {
                     Icon(Icons.Filled.Bolt, contentDescription = "Quick capture")
                 }
@@ -141,13 +137,10 @@ fun LifeOsApp(captureRequests: Int = 0, navBarIds: List<String> = emptyList()) {
             modifier = Modifier.padding(innerPadding),
             // One motion vocabulary (§7): screens fade through each other with a
             // barely-there scale, nothing slides or bounces.
-            enterTransition = {
-                fadeIn(LifeMotion.enterSpec()) + scaleIn(LifeMotion.enterSpec(), initialScale = 0.98f)
-            },
+            // Pure cross-fades: any scale reads as a corner reveal on a phone.
+            enterTransition = { fadeIn(LifeMotion.enterSpec()) },
             exitTransition = { fadeOut(LifeMotion.exitSpec()) },
-            popEnterTransition = {
-                fadeIn(LifeMotion.enterSpec()) + scaleIn(LifeMotion.enterSpec(), initialScale = 1.01f)
-            },
+            popEnterTransition = { fadeIn(LifeMotion.enterSpec()) },
             popExitTransition = { fadeOut(LifeMotion.exitSpec()) },
         ) {
             composable<LifeDestination.Home> {

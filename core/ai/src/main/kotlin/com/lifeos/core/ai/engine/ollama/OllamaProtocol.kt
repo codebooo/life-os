@@ -24,6 +24,8 @@ internal data class OllamaChatRequest(
 internal data class OllamaMessage(
     val role: String,
     val content: String,
+    /** Base64 images, which is how Ollama takes vision input. */
+    val images: List<String>? = null,
 )
 
 @Serializable
@@ -65,6 +67,13 @@ internal object OllamaProtocol {
             AiRole.ASSISTANT -> "assistant"
         },
         content = content,
+        images = imagePaths
+            .mapNotNull { path ->
+                runCatching {
+                    java.util.Base64.getEncoder().encodeToString(java.io.File(path).readBytes())
+                }.getOrNull()
+            }
+            .takeIf { it.isNotEmpty() },
     )
 }
 

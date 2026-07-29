@@ -6,6 +6,8 @@ import com.lifeos.core.database.screentime.AppUsageEntity
 import com.lifeos.core.database.screentime.ScreenTimeDao
 import com.lifeos.core.database.screentime.ScreenTimeDayEntity
 import com.lifeos.core.datastore.SettingsRepository
+import com.lifeos.feature.screentime.data.ScreenTimeExportFormat
+import com.lifeos.feature.screentime.data.ScreenTimeExporter
 import com.lifeos.feature.screentime.data.ScreenTimeCollector
 import kotlinx.coroutines.flow.first
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -52,6 +54,7 @@ data class ScreenTimeUiState(
 
 @HiltViewModel
 class ScreenTimeViewModel @Inject constructor(
+    private val exporter: ScreenTimeExporter,
     private val dao: ScreenTimeDao,
     private val collector: ScreenTimeCollector,
     private val settingsRepository: SettingsRepository,
@@ -117,31 +120,16 @@ class ScreenTimeViewModel @Inject constructor(
 
     /** Builds the requested export body; the screen writes it to Downloads. */
     suspend fun buildExport(format: ExportFormat, weekOnly: Boolean): Pair<String, String> {
-        val days = if (weekOnly) {
-            val keys = _uiState.value.days.map { it.date }.toSet()
-            dao.allDays().filter { it.date in keys }
-        } else {
-            dao.allDays()
-        }
-        val dayKeys = days.map { it.date }.toSet()
-        val apps = dao.allApps().filter { it.date in dayKeys }
-        val suffix = if (weekOnly) "week" else "all"
-        return when (format) {
-            ExportFormat.JSON -> "lifeos-screentime-$suffix.json" to exportJson(days, apps)
-            ExportFormat.CSV_DAYS -> "lifeos-screentime-days-$suffix.csv" to buildString {
-                appendLine("date,screen_time_minutes,unlocks,notifications")
-                days.sortedBy { it.date }.forEach {
-                    appendLine("${it.date},${it.totalForegroundMs / 60_000},${it.unlocks},${it.notifications}")
-                }
-            }
-            ExportFormat.CSV_APPS -> "lifeos-screentime-apps-$suffix.csv" to buildString {
-                appendLine("date,app,package,minutes")
-                apps.sortedWith(compareBy({ it.date }, { -it.foregroundMs })).forEach {
-                    val label = it.label.replace(",", " ")
-                    appendLine("${it.date},$label,${it.packageName},${it.foregroundMs / 60_000}")
-                }
-            }
-        }
+        val keys = if (weekOnly) _uiState.value.days.map { it.date }.toSet() else null
+        return exporter.build(
+            format = when (format) {
+                ExportFormat.JSON -> ScreenTimeExportFormat.JSON
+                ExportFormat.CSV_DAYS -> ScreenTimeExportFormat.CSV_DAYS
+                ExportFormat.CSV_APPS -> ScreenTimeExportFormat.CSV_APPS
+            },
+            dateKeys = keys,
+            suffix = if (weekOnly) "week" else "all",
+        )
     }
 
     fun onExported(fileName: String?) {
@@ -197,35 +185,4 @@ class ScreenTimeViewModel @Inject constructor(
     }
 
     /** JSON body for the given rows. */
-    private fun exportJson(
-        days: List<ScreenTimeDayEntity>,
-        appRows: List<AppUsageEntity>,
-    ): String {
-        val apps = appRows.groupBy { it.date }
-        val json = Json { prettyPrint = true }
-        val array = JsonArray(
-            days.map { day ->
-                JsonObject(
-                    mapOf(
-                        "date" to JsonPrimitive(day.date),
-                        "totalForegroundMs" to JsonPrimitive(day.totalForegroundMs),
-                        "unlocks" to JsonPrimitive(day.unlocks),
-                        "notifications" to JsonPrimitive(day.notifications),
-                        "apps" to JsonArray(
-                            (apps[day.date] ?: emptyList()).sortedByDescending { it.foregroundMs }.map {
-                                JsonObject(
-                                    mapOf(
-                                        "package" to JsonPrimitive(it.packageName),
-                                        "label" to JsonPrimitive(it.label),
-                                        "foregroundMs" to JsonPrimitive(it.foregroundMs),
-                                    ),
-                                )
-                            },
-                        ),
-                    ),
-                )
-            },
-        )
-        return json.encodeToString(JsonArray.serializer(), array)
-    }
 }

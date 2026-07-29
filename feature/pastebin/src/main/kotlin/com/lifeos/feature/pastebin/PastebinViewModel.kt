@@ -34,6 +34,7 @@ data class PastebinUiState(
     val loadingList: Boolean = false,
     // Share defaults
     val shareDefaults: ShareDefaults = ShareDefaults(),
+    val privateBinInstance: String = "",
     val message: String? = null,
 )
 
@@ -50,6 +51,7 @@ class PastebinViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(
                 shareDefaults = repository.shareDefaults(),
                 signedIn = repository.userKey().isNotBlank(),
+                privateBinInstance = repository.privateBinInstance(),
             )
             if (_uiState.value.signedIn) refreshList()
         }
@@ -87,14 +89,19 @@ class PastebinViewModel @Inject constructor(
                     burnAfterRead = state.burnAfterRead,
                     password = state.password,
                 ),
-                // Burn-after-read is a guest-only feature on Pastebin.
-                underAccount = state.signedIn && !state.burnAfterRead,
+                underAccount = state.signedIn,
             )
             _uiState.value = _uiState.value.copy(
                 posting = false,
                 lastUrl = result.getOrNull(),
                 message = result.fold(
-                    onSuccess = { "Paste created" },
+                    onSuccess = {
+                        if (state.burnAfterRead || state.password.isNotBlank()) {
+                            "Encrypted paste created on PrivateBin"
+                        } else {
+                            "Paste created"
+                        }
+                    },
                     onFailure = { it.message ?: "Could not create the paste" },
                 ),
             )
@@ -160,6 +167,11 @@ class PastebinViewModel @Inject constructor(
         val next = transform(_uiState.value.shareDefaults)
         _uiState.value = _uiState.value.copy(shareDefaults = next)
         viewModelScope.launch { repository.setShareDefaults(next) }
+    }
+
+    fun onPrivateBinInstance(value: String) {
+        _uiState.value = _uiState.value.copy(privateBinInstance = value)
+        viewModelScope.launch { repository.setPrivateBinInstance(value) }
     }
 
     fun dismissMessage() { _uiState.value = _uiState.value.copy(message = null) }

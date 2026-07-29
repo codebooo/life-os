@@ -118,6 +118,13 @@ internal class DataStoreSettingsRepository @Inject constructor(
         dataStore.edit { prefs -> prefs[KEY_PASTEBIN_USER_KEY] = key.trim() }
     }
 
+    override val privateBinInstance: Flow<String> =
+        dataStore.data.map { prefs -> prefs[KEY_PRIVATEBIN_INSTANCE] ?: "" }
+
+    override suspend fun setPrivateBinInstance(url: String) {
+        dataStore.edit { prefs -> prefs[KEY_PRIVATEBIN_INSTANCE] = url.trim() }
+    }
+
     override val clearSkyPlaces: Flow<String> =
         dataStore.data.map { prefs -> prefs[KEY_CLEAR_SKY_PLACES] ?: "" }
 
@@ -154,6 +161,7 @@ internal class DataStoreSettingsRepository @Inject constructor(
         val KEY_SCREEN_TIME_REBUILT = booleanPreferencesKey("screen_time_rebuilt_v2")
         val KEY_PASTEBIN_SHARE_DEFAULTS = stringPreferencesKey("pastebin_share_defaults")
         val KEY_PASTEBIN_USER_KEY = stringPreferencesKey("pastebin_user_key")
+        val KEY_PRIVATEBIN_INSTANCE = stringPreferencesKey("privatebin_instance")
         val KEY_CLEAR_SKY_PLACES = stringPreferencesKey("clear_sky_places")
         val KEY_CLEAR_SKY_LAST_PLACE = stringPreferencesKey("clear_sky_last_place")
     }

@@ -1,5 +1,6 @@
 package com.lifeos.core.database.chat
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -37,4 +38,6 @@ data class AiMessageEntity(
     val content: String,
     val engine: String?,
     val createdAt: Long,
+    /** Newline-separated local image paths attached to this turn. */
+    @ColumnInfo(defaultValue = "") val imagePaths: String = "",
 )
