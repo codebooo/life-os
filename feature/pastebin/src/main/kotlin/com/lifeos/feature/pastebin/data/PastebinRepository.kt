@@ -43,6 +43,7 @@ data class ShareDefaults(
 @Singleton
 class PastebinRepository @Inject constructor(
     private val api: PastebinApi,
+    private val privateBin: PrivateBinClient,
     private val settingsRepository: SettingsRepository,
 ) {
 
@@ -64,10 +65,41 @@ class PastebinRepository @Inject constructor(
 
     suspend fun signOut() = settingsRepository.setPastebinUserKey("")
 
+    /**
+     * Creates a paste on whichever backend can actually honour the request.
+     *
+     * Burn-after-read and passwords do not exist in Pastebin's developer API, so
+     * those go to PrivateBin (end-to-end encrypted, key in the link fragment).
+     * Everything else goes to Pastebin, under the account when signed in.
+     */
     suspend fun create(request: PasteRequest, underAccount: Boolean): Result<String> {
+        if (request.burnAfterRead || request.password.isNotBlank()) {
+            return privateBin.create(
+                instance = privateBinInstance(),
+                text = if (request.title.isBlank()) {
+                    request.content
+                } else {
+                    "${request.title}\n\n${request.content}"
+                },
+                expiry = request.expiry,
+                burnAfterRead = request.burnAfterRead,
+                password = request.password,
+                markdown = request.format == "markdown",
+            )
+        }
         val key = if (underAccount) userKey().ifBlank { null } else null
         return api.createPaste(devKey, request, key)
     }
+
+    suspend fun privateBinInstance(): String =
+        settingsRepository.privateBinInstance.first().ifBlank { PrivateBinClient.DEFAULT_INSTANCE }
+
+    suspend fun setPrivateBinInstance(url: String) =
+        settingsRepository.setPrivateBinInstance(url.trim())
+
+    /** Which backend a request would land on, for the UI to say so up front. */
+    fun backendFor(burnAfterRead: Boolean, password: String): String =
+        if (burnAfterRead || password.isNotBlank()) "PrivateBin" else "Pastebin"
 
     /** Creates a paste using the saved share-sheet defaults. */
     suspend fun createFromShare(title: String, content: String): Result<String> {
@@ -81,9 +113,7 @@ class PastebinRepository @Inject constructor(
                 burnAfterRead = defaults.burnAfterRead,
                 password = defaults.password,
             ),
-            // Burn-after-read only works for guest pastes, so a burner paste is
-            // deliberately posted without the account key.
-            underAccount = !defaults.burnAfterRead,
+            underAccount = true,
         )
     }
 

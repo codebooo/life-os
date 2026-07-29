@@ -105,7 +105,7 @@ import com.lifeos.core.database.screentime.ScreenTimeDayEntity
         BrickSessionEntity::class,
         BrickUsageEntity::class,
     ],
-    version = 15,
+    version = 16,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -122,6 +122,7 @@ import com.lifeos.core.database.screentime.ScreenTimeDayEntity
         AutoMigration(from = 12, to = 13),
         AutoMigration(from = 13, to = 14),
         AutoMigration(from = 14, to = 15),
+        AutoMigration(from = 15, to = 16),
     ],
 )
 abstract class LifeDatabase : RoomDatabase() {

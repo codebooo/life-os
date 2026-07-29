@@ -1,6 +1,5 @@
 package com.lifeos.feature.clock
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -151,7 +150,7 @@ private fun FacesTab(face: Int, onFace: (Int) -> Unit) {
                 FilterChip(selected = face == index, onClick = { onFace(index) }, label = { Text(label) })
             }
         }
-        AnimatedContent(targetState = face, label = "face") { selected ->
+        FadeThrough(targetState = face, label = "face") { selected ->
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 when (selected) {
                     0 -> Text(
@@ -548,7 +547,6 @@ private fun TimerTab() {
                 WheelPicker(range = 0..59, value = seconds, onValue = { seconds = it }, onTap = { typedField = 2 })
                 WheelLabel("s")
             }
-            TextButton(onClick = { typedField = 0 }) { Text("Type a duration") }
         }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

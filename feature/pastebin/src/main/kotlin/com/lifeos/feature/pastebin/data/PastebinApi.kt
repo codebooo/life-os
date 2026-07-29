@@ -10,17 +10,21 @@ import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** How long a paste lives (Pastebin's `api_paste_expire_date` values). */
-enum class PasteExpiry(val apiValue: String, val label: String) {
-    NEVER("N", "Never"),
-    TEN_MINUTES("10M", "10 minutes"),
-    ONE_HOUR("1H", "1 hour"),
-    ONE_DAY("1D", "1 day"),
-    ONE_WEEK("1W", "1 week"),
-    TWO_WEEKS("2W", "2 weeks"),
-    ONE_MONTH("1M", "1 month"),
-    SIX_MONTHS("6M", "6 months"),
-    ONE_YEAR("1Y", "1 year"),
+/**
+ * How long a paste lives. [apiValue] is Pastebin's `api_paste_expire_date`;
+ * [privateBinValue] is the nearest PrivateBin window, never rounded upwards so
+ * a burner never outlives what was asked for.
+ */
+enum class PasteExpiry(val apiValue: String, val privateBinValue: String, val label: String) {
+    NEVER("N", "never", "Never"),
+    TEN_MINUTES("10M", "10min", "10 minutes"),
+    ONE_HOUR("1H", "1hour", "1 hour"),
+    ONE_DAY("1D", "1day", "1 day"),
+    ONE_WEEK("1W", "1week", "1 week"),
+    TWO_WEEKS("2W", "1week", "2 weeks"),
+    ONE_MONTH("1M", "1month", "1 month"),
+    SIX_MONTHS("6M", "1month", "6 months"),
+    ONE_YEAR("1Y", "1year", "1 year"),
 }
 
 /** Who can see a paste (`api_paste_private`). */
@@ -38,9 +42,12 @@ data class PasteRequest(
     val visibility: PasteVisibility = PasteVisibility.UNLISTED,
     /** Pastebin's syntax id, e.g. "text", "kotlin", "json". */
     val format: String = "text",
-    /** Burn-after-read. Pastebin only honours this for guest (non-logged-in) pastes. */
+    /**
+     * Burn-after-read. Pastebin's developer API cannot do this, so a request
+     * with this set is routed to PrivateBin instead (see [PrivateBinClient]).
+     */
     val burnAfterRead: Boolean = false,
-    /** Optional password prompt before the paste can be read. */
+    /** Read password. Also PrivateBin-only, for the same reason. */
     val password: String = "",
 )
 
@@ -71,36 +78,60 @@ class PastebinApi @Inject constructor() {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    /** Creates a paste; returns its URL. [userKey] posts it under the account. */
+    /**
+     * Creates a paste; returns its URL. [userKey] posts it under the account,
+     * which is also the only way `private` visibility is accepted.
+     *
+     * Burn-after-read and password are deliberately absent: they are not part of
+     * this API, and silently dropping them was worse than routing elsewhere.
+     */
     suspend fun createPaste(
         devKey: String,
         request: PasteRequest,
         userKey: String? = null,
-    ): Result<String> = post(
-        url = POST_URL,
-        fields = buildMap {
-            put("api_dev_key", devKey)
-            put("api_option", "paste")
-            put("api_paste_code", request.content)
-            put("api_paste_name", request.title)
-            put("api_paste_expire_date", request.expiry.apiValue)
-            put("api_paste_private", request.visibility.apiValue.toString())
-            put("api_paste_format", request.format)
-            if (request.burnAfterRead) put("api_paste_burn", "1")
-            if (request.password.isNotBlank()) put("api_paste_password", request.password)
-            if (!userKey.isNullOrBlank()) put("api_user_key", userKey)
-        },
-    ).map { it.trim() }
+    ): Result<String> {
+        if (request.visibility == PasteVisibility.PRIVATE && userKey.isNullOrBlank()) {
+            return Result.failure(IllegalStateException("Private pastes need you to sign in first"))
+        }
+        return post(
+            url = POST_URL,
+            fields = buildMap {
+                put("api_dev_key", devKey)
+                put("api_option", "paste")
+                put("api_paste_code", request.content)
+                put("api_paste_name", request.title)
+                put("api_paste_expire_date", request.expiry.apiValue)
+                put("api_paste_private", request.visibility.apiValue.toString())
+                put("api_paste_format", request.format)
+                if (!userKey.isNullOrBlank()) put("api_user_key", userKey)
+            },
+        ).mapCatching { text ->
+            val url = text.trim()
+            // Maintenance windows answer 200 with an HTML page, so insist on a URL.
+            if (!url.startsWith("https://pastebin.com/")) {
+                error(describe(url))
+            }
+            url
+        }
+    }
 
-    /** Exchanges account credentials for the user key needed by list/delete. */
+    /**
+     * Exchanges account credentials for the user key needed by list/delete and
+     * by posting under the account. The reply is the bare key, so anything that
+     * is not key-shaped is an error page and gets reported as one.
+     */
     suspend fun login(devKey: String, username: String, password: String): Result<String> = post(
         url = LOGIN_URL,
         fields = mapOf(
             "api_dev_key" to devKey,
-            "api_user_name" to username,
+            "api_user_name" to username.trim(),
             "api_user_password" to password,
         ),
-    ).map { it.trim() }
+    ).mapCatching { text ->
+        val key = text.trim()
+        if (!USER_KEY.matches(key)) error(describe(key))
+        key
+    }
 
     /** The account's pastes, newest first. */
     suspend fun listPastes(devKey: String, userKey: String, limit: Int = 50): Result<List<PasteSummary>> =
@@ -178,6 +209,18 @@ class PastebinApi @Inject constructor() {
             )
         }.toList()
 
+    /** Turns whatever came back into something worth showing the user. */
+    private fun describe(body: String): String {
+        val flat = body.replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ").trim()
+        return when {
+            flat.isBlank() -> "Pastebin returned an empty response"
+            flat.contains("READ-ONLY", ignoreCase = true) || flat.contains("maintenance", ignoreCase = true) ->
+                "Pastebin is in read-only maintenance right now - try again in a few minutes"
+            flat.startsWith("Bad API request") -> flat.removePrefix("Bad API request,").trim()
+            else -> flat.take(160)
+        }
+    }
+
     companion object {
         /** Personal developer key for this sideloaded build (§Module Pastebin). */
         const val DEFAULT_DEV_KEY = "RMdq0LvnD38fn3jDoLtnE4k7zSlu6FTJ"
@@ -193,5 +236,6 @@ class PastebinApi @Inject constructor() {
         private const val RAW_URL = "https://pastebin.com/api/api_raw.php"
         private const val TAG = "PastebinApi"
         private val PASTE_BLOCK = Regex("<paste>(.*?)</paste>", RegexOption.DOT_MATCHES_ALL)
+        private val USER_KEY = Regex("[A-Za-z0-9]{16,64}")
     }
 }

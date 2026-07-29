@@ -13,6 +13,9 @@ import com.lifeos.core.common.storage.LifeOsPublicMirror
 import com.lifeos.core.model.LifeModule
 import com.lifeos.core.model.SourceRef
 import com.lifeos.core.service.LifeAction
+import com.lifeos.core.common.result.LifeResult
+import com.lifeos.core.service.ActionEcho
+import com.lifeos.core.service.LifeDataProvider
 import com.lifeos.core.service.LifeActionDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -45,21 +48,101 @@ class JarvisToolbox @Inject constructor(
     private val financeDao: FinanceDao,
     private val bookDao: BookDao,
     private val publicMirror: LifeOsPublicMirror,
+    /**
+     * Every module's own read-side, registered from the feature modules. Kept
+     * out of the always-on prompt on purpose: detail is fetched only when the
+     * model asks for it, so a chat that needs nothing costs nothing.
+     */
+    private val providers: Set<@JvmSuppressWildcards LifeDataProvider>,
+    private val echo: ActionEcho,
 ) {
 
-    /** The tool contract the model sees. Kept terse — every char costs latency. */
-    val toolSpec: String =
-        """
-        To CHANGE the user's LifeOS data, emit commands on their own line, exactly:
+    /**
+     * The tool contract the model sees. Kept terse — every char costs latency,
+     * and the topic list is generated from whatever modules are installed.
+     */
+    val toolSpec: String
+        get() = """
+        To CHANGE LifeOS data, emit commands on their own line, exactly:
         [[add_task: title]] [[done_task: id]] [[delete_task: id]]
         [[timer: 5m]] [[remind: 18:00 | title]] [[remind: +25m | title]] [[cancel_reminder: id]]
         [[event: tomorrow 15:00 | title]] [[note: title | body]]
         [[edit_note: title | new full body]] [[append_note: title | text to add]]
-        Rules: Commands are ONLY for changing LifeOS data — for everything else (questions,
-        math, writing, chat) just answer normally in plain words using LIVE DATA when it's
-        about the user's own items. The data is already in front of you: never say you will
-        look or search. Use ids from LIVE DATA. Never claim an action you didn't emit.
+        [[paste: title | text]] [[burner_paste: title | text]] (burner = one-time, encrypted)
+        [[download: url]] [[water_plant: name]] [[add_plant: name | species | every N days]]
+        [[brick_on: mode name]] [[brick_off:]] [[focus: 25m]] [[focus_stop:]]
+        [[sync_screen_time:]] [[export_screen_time: json|csv_days|csv_apps]]
+        [[run_macro: name]]
+        To READ a module in detail, emit ONE line and stop; the answer comes back to you:
+        [[get: topic]] or [[get: topic | query]] — topics: ${topicList()}
+        Rules: use [[get:]] only when the answer needs data that is not already in LIVE DATA
+        below. For anything else (questions, math, writing, chat) just answer in plain words.
+        Never say you will look something up: either emit [[get:]] or answer. Use ids from
+        LIVE DATA. Never claim an action you did not emit.
         """.trimIndent()
+
+    private fun topicList(): String =
+        (BUILT_IN_TOPICS + providers.map { it.topic }).distinct().sorted().joinToString(", ")
+
+    /** True when the reply asks for data, meaning the turn needs a second pass. */
+    fun requestedReads(modelText: String): List<Pair<String, String?>> =
+        TOOL_TAG.findAll(repair(modelText))
+            .filter { it.groupValues[1].trim().lowercase() == "get" }
+            .map { match ->
+                val (topic, query) = splitArgs(match.groupValues[2])
+                topic.trim().lowercase().replace(' ', '_') to query.takeIf { it.isNotBlank() }
+            }
+            .toList()
+
+    /** Runs the requested reads and returns a block to feed back to the model. */
+    suspend fun fetchReads(reads: List<Pair<String, String?>>, debug: JarvisDebug? = null): String {
+        val blocks = mutableListOf<String>()
+        reads.take(MAX_READS_PER_TURN).forEach { (topic, query) ->
+            val body = runCatching { readTopic(topic, query) }
+                .getOrElse { "$topic: could not be read (${it.message})" }
+            debug?.add("read", "$topic(${query ?: ""}) -> ${body.take(200)}")
+            blocks += body.take(1200)
+        }
+        return blocks.joinToString("\n\n")
+    }
+
+    private suspend fun readTopic(topic: String, query: String?): String {
+        providers.firstOrNull { it.topic == topic }?.let { return it.read(query) }
+        return when (topic) {
+            "tasks" -> captureDao.observeTasks().first().filter { !it.done }
+                .joinToString("\n") { "- [${it.id}] ${it.title}" }
+                .ifBlank { "No open tasks." }
+
+            "notes" -> noteDao.observeAll().first()
+                .joinToString("\n") { "- ${it.title}" }
+                .ifBlank { "No notes." }
+
+            "calendar" -> calendarDao.observeUpcoming(System.currentTimeMillis()).first()
+                .take(15)
+                .joinToString("\n") { "- ${AT.format(Date(it.startsAt))} ${it.title}" }
+                .ifBlank { "Calendar is empty." }
+
+            "reminders" -> reminderDao.observeAll().first().filter { it.enabled && it.firedAt == null }
+                .joinToString("\n") { "- [${it.id}] ${AT.format(Date(it.at))} ${it.title}" }
+                .ifBlank { "No reminders." }
+
+            "packages" -> packageDao.activePackages()
+                .joinToString("\n") { "- ${it.label ?: it.trackingNumber}: ${it.statusDescription ?: it.status}" }
+                .ifBlank { "No tracked parcels." }
+
+            "finance" -> financeDao.observeSubscriptions().first()
+                .joinToString("\n") { "- ${it.merchant} ${it.amountCents / 100.0}€ ${it.cadence}" }
+                .ifBlank { "No subscriptions." }
+
+            "books" -> bookDao.observeAll().first()
+                .joinToString("\n") { "- ${it.title} — ${it.author} (${it.status})" }
+                .ifBlank { "No books shelved." }
+
+            "search" -> search(query.orEmpty())
+
+            else -> "Unknown topic \"$topic\". Known: ${topicList()}"
+        }
+    }
 
     /** Live cross-module state, compact, with stable ids the model can act on. */
     suspend fun snapshot(): String = buildString {
@@ -140,10 +223,7 @@ class JarvisToolbox @Inject constructor(
         val results = mutableListOf<String>()
         // Small models often drop one closing bracket ("…body.]"). Repair
         // lines that open a tool tag but only close with a single ']'.
-        val repaired = modelText.lineSequence().joinToString("\n") { line ->
-            val t = line.trimEnd()
-            if (t.startsWith("[[") && !t.endsWith("]]") && t.endsWith("]")) "$t]" else line
-        }
+        val repaired = repair(modelText)
         TOOL_TAG.findAll(repaired).forEach { match ->
             val tool = match.groupValues[1].trim().lowercase()
             val args = match.groupValues[2].trim()
@@ -167,6 +247,12 @@ class JarvisToolbox @Inject constructor(
             cleaned.isBlank() -> results.joinToString("\n")
             else -> cleaned + "\n\n" + results.joinToString("\n")
         }
+    }
+
+    /** Small models often drop one closing bracket ("…body.]"). */
+    private fun repair(modelText: String): String = modelText.lineSequence().joinToString("\n") { line ->
+        val t = line.trimEnd()
+        if (t.startsWith("[[") && !t.endsWith("]]") && t.endsWith("]")) "$t]" else line
     }
 
     private suspend fun execute(tool: String, args: String): String? = when (tool) {
@@ -214,7 +300,103 @@ class JarvisToolbox @Inject constructor(
         "edit_note" -> rewriteNote(args, append = false)
         "append_note" -> rewriteNote(args, append = true)
         "search" -> search(args)
+
+        // ---- module actions (dispatched, so chat never imports a feature) ----
+        "paste", "burner_paste" -> {
+            val (title, body) = splitArgs(args)
+            val content = body.ifBlank { title }
+            if (content.isBlank()) error("nothing to paste")
+            dispatch(
+                LifeAction.CreatePaste(
+                    title = if (body.isBlank()) "From Jarvis" else title,
+                    content = content,
+                    burner = tool == "burner_paste",
+                    password = "",
+                    source = SOURCE,
+                ),
+            )
+            val url = echo.lastUrl
+            if (tool == "burner_paste") {
+                "One-time encrypted paste: ${url ?: "created"}"
+            } else {
+                "Paste created: ${url ?: "done"}"
+            }
+        }
+
+        "download" -> {
+            dispatch(LifeAction.StartDownload(args.trim(), SOURCE))
+            "Download queued from ${args.trim().take(60)}"
+        }
+
+        "water_plant" -> {
+            dispatch(LifeAction.WaterPlant(args.trim(), SOURCE))
+            "Watered ${args.trim()}"
+        }
+
+        "add_plant" -> {
+            val parts = args.split('|').map { it.trim() }
+            val name = parts.firstOrNull().orEmpty()
+            if (name.isBlank()) error("need a plant name")
+            val days = parts.getOrNull(2)?.filter { it.isDigit() }?.toIntOrNull() ?: 7
+            dispatch(
+                LifeAction.AddPlant(
+                    plantName = name,
+                    species = parts.getOrNull(1).orEmpty(),
+                    waterEveryDays = days,
+                    source = SOURCE,
+                ),
+            )
+            "Added plant $name, watering every ${days}d"
+        }
+
+        "brick_on" -> {
+            dispatch(LifeAction.StartBrickMode(args.trim(), SOURCE))
+            "Brick mode \"${args.trim()}\" is blocking"
+        }
+
+        "brick_off" -> {
+            dispatch(LifeAction.StopBrickMode(SOURCE))
+            "Brick mode ended"
+        }
+
+        "focus" -> {
+            val minutes = (parseDuration(args) ?: error("bad duration \"$args\"")) / 60_000L
+            dispatch(LifeAction.StartFocusTimer(minutes.toInt().coerceAtLeast(1), SOURCE))
+            "Focus timer started for ${minutes.toInt()} min"
+        }
+
+        "focus_stop" -> {
+            dispatch(LifeAction.StopFocusTimer(SOURCE))
+            "Focus timer stopped"
+        }
+
+        "sync_screen_time" -> {
+            dispatch(LifeAction.SyncScreenTime(SOURCE))
+            "Screen time synced"
+        }
+
+        "export_screen_time" -> {
+            val weekOnly = args.contains("week", ignoreCase = true)
+            dispatch(LifeAction.ExportScreenTime(args.ifBlank { "json" }, weekOnly, SOURCE))
+            "Screen-time export saved to Downloads: ${echo.lastFileName ?: "done"}"
+        }
+
+        "run_macro" -> {
+            dispatch(LifeAction.RunMacro(args.trim(), SOURCE))
+            "Ran macro \"${args.trim()}\""
+        }
+
+        // Reads are handled before this point (they feed a second pass).
+        "get" -> null
         else -> null
+    }
+
+    /** Dispatches and turns a failure into an error the caller reports. */
+    private suspend fun dispatch(action: LifeAction) {
+        when (val result = dispatcher.dispatch(action)) {
+            is LifeResult.Failure -> error(result.error.message)
+            is LifeResult.Success -> Unit
+        }
     }
 
     /** Rewrites (or appends to) a plain note's file by fuzzy title match. */
@@ -336,5 +518,10 @@ class JarvisToolbox @Inject constructor(
         val AT = SimpleDateFormat("EEE HH:mm", Locale.getDefault())
         val STAMP = SimpleDateFormat("EEE d MMM HH:mm", Locale.getDefault())
         val SEARCH_STOP = setOf("the", "and", "for", "with", "search", "find", "look", "please")
+        /** Topics served straight from core DAOs, without a feature provider. */
+        val BUILT_IN_TOPICS = listOf(
+            "tasks", "notes", "calendar", "reminders", "packages", "finance", "books", "search",
+        )
+        const val MAX_READS_PER_TURN = 2
     }
 }

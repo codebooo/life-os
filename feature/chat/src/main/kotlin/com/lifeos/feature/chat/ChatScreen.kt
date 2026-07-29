@@ -1,34 +1,37 @@
 package com.lifeos.feature.chat
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,9 +49,15 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -78,6 +87,15 @@ internal fun ChatScreen(
         uiState.error?.let {
             snackbarHostState.showSnackbar(it)
             onEvent(ChatUiEvent.DismissError)
+        }
+    }
+
+    // Gallery images are copied into app storage so the model can read them
+    // after the picker's temporary permission is gone.
+    val context = LocalContext.current
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) {
+            copyToChatImages(context, uri)?.let { path -> onEvent(ChatUiEvent.ImageAttached(path)) }
         }
     }
 
@@ -133,11 +151,39 @@ internal fun ChatScreen(
             if (uiState.debugEnabled) {
                 JarvisDebugPanel(uiState.debugLog)
             }
+            // Attached images sit above the bar so it stays obvious what will be sent.
+            if (uiState.pendingImages.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    uiState.pendingImages.forEach { path ->
+                        Box {
+                            ThumbImage(path = path, size = 72.dp, description = "Attached image")
+                            IconButton(
+                                onClick = { onEvent(ChatUiEvent.ImageRemoved(path)) },
+                                modifier = Modifier.align(Alignment.TopEnd).size(24.dp),
+                            ) {
+                                Icon(
+                                    Icons.Filled.Close,
+                                    contentDescription = "Remove image",
+                                    modifier = Modifier.size(16.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
             AiInputBar(
                 value = uiState.input,
                 onValueChange = { onEvent(ChatUiEvent.InputChanged(it)) },
                 onSend = { onEvent(ChatUiEvent.Send) },
                 busy = uiState.streaming,
+                onAttachImage = { imagePicker.launch("image/*") },
+                hasAttachments = uiState.pendingImages.isNotEmpty(),
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             )
         }
@@ -346,6 +392,19 @@ private fun MessageBubble(message: AiMessageEntity) {
                 .padding(horizontal = 14.dp, vertical = 10.dp),
         ) {
             Column(horizontalAlignment = Alignment.Start) {
+                val images = remember(message.imagePaths) {
+                    message.imagePaths.split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+                }
+                if (images.isNotEmpty()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(bottom = 8.dp),
+                    ) {
+                        images.forEach { path ->
+                            ThumbImage(path = path, size = 140.dp)
+                        }
+                    }
+                }
                 val (thoughts, answer) = remember(message.content) { splitThinking(message.content) }
                 if (thoughts != null) {
                     ThoughtChain(thoughts)
@@ -416,4 +475,42 @@ private fun splitThinking(content: String): Pair<String?, String> {
     } else {
         afterOpen.substring(0, close) to afterOpen.substring(close + 8).trim()
     }
+}
+
+/**
+ * Copies a picked image into the app's chat-images folder and returns its path.
+ * The picker only grants a short-lived permission on the Uri, and inference runs
+ * later on another thread, so the bytes have to be ours first.
+ */
+private fun copyToChatImages(context: android.content.Context, uri: android.net.Uri): String? = runCatching {
+    val dir = java.io.File(context.filesDir, "chat-images").apply { mkdirs() }
+    val target = java.io.File(dir, "img-${System.currentTimeMillis()}.jpg")
+    context.contentResolver.openInputStream(uri)?.use { input ->
+        target.outputStream().use { output -> input.copyTo(output) }
+    } ?: return null
+    target.absolutePath
+}.getOrNull()
+
+/** Bounded bitmap thumbnail, decoded once per path (no image library needed). */
+@Composable
+private fun ThumbImage(path: String, size: androidx.compose.ui.unit.Dp, description: String? = null) {
+    val bitmap = remember(path) {
+        runCatching {
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            android.graphics.BitmapFactory.decodeFile(path, bounds)
+            val longest = maxOf(bounds.outWidth, bounds.outHeight).coerceAtLeast(1)
+            val options = android.graphics.BitmapFactory.Options().apply {
+                inSampleSize = 1
+                while (longest / inSampleSize > 512) inSampleSize *= 2
+            }
+            android.graphics.BitmapFactory.decodeFile(path, options)?.asImageBitmap()
+        }.getOrNull()
+    }
+    if (bitmap == null) return
+    Image(
+        bitmap = bitmap,
+        contentDescription = description,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier.size(size).clip(RoundedCornerShape(12.dp)),
+    )
 }

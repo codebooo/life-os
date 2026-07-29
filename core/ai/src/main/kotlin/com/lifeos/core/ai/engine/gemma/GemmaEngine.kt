@@ -1,6 +1,11 @@
 package com.lifeos.core.ai.engine.gemma
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import com.google.mediapipe.framework.image.BitmapImageBuilder
+import com.google.mediapipe.tasks.genai.llminference.GraphOptions
+import com.google.mediapipe.tasks.genai.llminference.LlmInferenceSession
 import com.google.mediapipe.tasks.genai.llminference.LlmInference
 import com.lifeos.core.ai.engine.AiEngine
 import com.lifeos.core.ai.model.AiChunk
@@ -44,6 +49,7 @@ class GemmaEngine @Inject constructor(
     private val mutex = Mutex()
     private var llm: LlmInference? = null
     private var loadedModelPath: String? = null
+    private var loadedWithVision = false
 
     // A dedicated single background thread so inference NEVER competes with the
     // shared IO pool (which the whole app uses) — that competition, plus the
@@ -64,11 +70,16 @@ class GemmaEngine @Inject constructor(
         val file = modelFile()
         check(file != null && file.exists()) { "No on-device model at ${file?.absolutePath}" }
 
+        val images = request.messages.flatMap { it.imagePaths }.takeLast(MAX_IMAGES)
         val text = mutex.withLock {
             try {
                 withTimeout(GENERATE_TIMEOUT_MS) {
-                    val inference = loadIfNeeded(file.absolutePath)
-                    inference.generateResponse(buildPrompt(request))
+                    val inference = loadIfNeeded(file.absolutePath, withVision = images.isNotEmpty())
+                    if (images.isEmpty()) {
+                        inference.generateResponse(buildPrompt(request))
+                    } else {
+                        generateWithImages(inference, buildPrompt(request), images)
+                    }
                 }
             } catch (t: Throwable) {
                 // Poisoned session/OOM/timeout — drop the model so the next try is clean.
@@ -90,16 +101,19 @@ class GemmaEngine @Inject constructor(
         LifeLogger.i(TAG, "Model released")
     }
 
-    private fun loadIfNeeded(path: String): LlmInference {
+    private fun loadIfNeeded(path: String, withVision: Boolean): LlmInference {
         val current = llm
-        if (current != null && loadedModelPath == path) return current
+        // Vision needs an image slot reserved at load time, so a text-only
+        // handle is reloaded the first time an image shows up (and vice versa).
+        if (current != null && loadedModelPath == path && loadedWithVision == withVision) return current
         current?.close()
 
-        LifeLogger.i(TAG, "Loading on-device model from $path (CPU)")
+        LifeLogger.i(TAG, "Loading on-device model from $path (CPU, vision=$withVision)")
         val options = LlmInference.LlmInferenceOptions.builder()
             .setModelPath(path)
             // Smaller cap = faster answers and far less memory pressure than 2048.
-            .setMaxTokens(MAX_TOKENS)
+            .setMaxTokens(if (withVision) MAX_TOKENS_VISION else MAX_TOKENS)
+            .apply { if (withVision) setMaxNumImages(MAX_IMAGES) }
             // CPU backend on purpose: the GPU delegate froze the S22 Ultra
             // compositor. Reliability over raw speed for on-device.
             .setPreferredBackend(LlmInference.Backend.CPU)
@@ -107,8 +121,42 @@ class GemmaEngine @Inject constructor(
         return LlmInference.createFromOptions(context, options).also {
             llm = it
             loadedModelPath = path
+            loadedWithVision = withVision
         }
     }
+
+    /**
+     * Vision prompts go through a session: images are added as their own chunks
+     * alongside the text, which is what the multimodal Gemma builds expect.
+     * Decoding the bitmaps is bounded so a 12 MP photo cannot blow up memory.
+     */
+    private fun generateWithImages(inference: LlmInference, prompt: String, imagePaths: List<String>): String {
+        val sessionOptions = LlmInferenceSession.LlmInferenceSessionOptions.builder()
+            .setGraphOptions(GraphOptions.builder().setEnableVisionModality(true).build())
+            .build()
+        return LlmInferenceSession.createFromOptions(inference, sessionOptions).use { session ->
+            imagePaths.forEach { path ->
+                val bitmap = decodeBounded(path)
+                if (bitmap != null) {
+                    session.addImage(BitmapImageBuilder(bitmap).build())
+                }
+            }
+            session.addQueryChunk(prompt)
+            session.generateResponse()
+        }
+    }
+
+    /** Decodes at most [MAX_IMAGE_EDGE] px on the long edge. */
+    private fun decodeBounded(path: String): Bitmap? = runCatching {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, bounds)
+        val longest = maxOf(bounds.outWidth, bounds.outHeight).coerceAtLeast(1)
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = 1
+            while (longest / inSampleSize > MAX_IMAGE_EDGE) inSampleSize *= 2
+        }
+        BitmapFactory.decodeFile(path, options)
+    }.getOrNull()
 
     private suspend fun modelFile(): File? {
         val configured = aiConfigRepository.config.first().onDeviceModelPath
@@ -175,5 +223,9 @@ class GemmaEngine @Inject constructor(
         // window is always left for the reply, whatever the caller sends.
         const val MAX_PROMPT_CHARS = 2600
         const val GENERATE_TIMEOUT_MS = 90_000L
+        // Vision prompts need headroom for the image tokens on top of the text.
+        const val MAX_TOKENS_VISION = 2048
+        const val MAX_IMAGES = 2
+        const val MAX_IMAGE_EDGE = 768
     }
 }

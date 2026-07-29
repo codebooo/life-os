@@ -80,6 +80,11 @@ interface SettingsRepository {
 
     suspend fun setPastebinUserKey(key: String)
 
+    /** PrivateBin instance used for burner pastes; empty = the public default. */
+    val privateBinInstance: Flow<String>
+
+    suspend fun setPrivateBinInstance(url: String)
+
     /** Saved Clear Sky observing spots, one "name~lat~lon" per line. */
     val clearSkyPlaces: Flow<String>
 

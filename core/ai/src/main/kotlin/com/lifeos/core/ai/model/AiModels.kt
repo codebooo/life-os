@@ -11,6 +11,11 @@ enum class AiRole { SYSTEM, USER, ASSISTANT }
 data class AiMessage(
     val role: AiRole,
     val content: String,
+    /**
+     * Local file paths of images that belong to this turn. Vision-capable
+     * engines feed them to the model; text-only ones ignore them.
+     */
+    val imagePaths: List<String> = emptyList(),
 )
 
 /**

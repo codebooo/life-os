@@ -31,7 +31,11 @@ interface ChatRepository {
      * is null), streams the assistant reply into a message row, and reports
      * progress. History is replayed to the engine for context.
      */
-    fun sendMessage(conversationId: Long?, text: String): Flow<ReplyProgress>
+    fun sendMessage(
+        conversationId: Long?,
+        text: String,
+        imagePaths: List<String> = emptyList(),
+    ): Flow<ReplyProgress>
 
     suspend fun deleteConversation(conversationId: Long)
 }
@@ -51,7 +55,11 @@ internal class DefaultChatRepository @Inject constructor(
     override fun observeMessages(conversationId: Long): Flow<List<AiMessageEntity>> =
         chatDao.observeMessages(conversationId)
 
-    override fun sendMessage(conversationId: Long?, text: String): Flow<ReplyProgress> = flow {
+    override fun sendMessage(
+        conversationId: Long?,
+        text: String,
+        imagePaths: List<String>,
+    ): Flow<ReplyProgress> = flow {
         val now = System.currentTimeMillis()
         val convId = conversationId ?: chatDao.insertConversation(
             AiConversationEntity(title = text.take(48), createdAt = now, updatedAt = now),
@@ -70,9 +78,10 @@ internal class DefaultChatRepository @Inject constructor(
                 content = text,
                 engine = null,
                 createdAt = now,
+                imagePaths = imagePaths.joinToString("\n"),
             ),
         )
-        history += AiMessage(AiRole.USER, text)
+        history += AiMessage(AiRole.USER, text, imagePaths = imagePaths)
 
         var assistantMessageId: Long? = null
         var engine: AiEngineId? = null
@@ -103,31 +112,56 @@ internal class DefaultChatRepository @Inject constructor(
         // maxTokens budget covers input AND output — an oversized prompt eats
         // the answer's budget and truncates it mid-sentence. Keep it tight.
         debug.beginTurn(text)
+        // Trimming keeps the newest turn's images: they are the question.
         val trimmedHistory = history.takeLast(4).map { it.copy(content = it.content.take(400)) }
         val snapshot = runCatching { toolbox.snapshot() }.getOrDefault("")
         val system = SYSTEM_PROMPT + "\n\n" + toolbox.toolSpec + "\n\n" + snapshot
         debug.add("snapshot", snapshot)
-        val request = AiRequest(messages = trimmedHistory, system = system)
-        aiRouter.stream(request).collect { event ->
-            when (event) {
-                is AiRouter.StreamEvent.EngineSelected -> {
-                    engine = event.engine
-                    emit(ReplyProgress.Started(convId, event.engine))
+        var request = AiRequest(messages = trimmedHistory, system = system)
+
+        // Two-pass tool use: the first reply may ask for a module's detail with
+        // a [[get: topic]] line. That costs one extra inference only when the
+        // model actually needs data, which is why the always-on snapshot can
+        // stay small.
+        suspend fun runPass() {
+            aiRouter.stream(request).collect { event ->
+                when (event) {
+                    is AiRouter.StreamEvent.EngineSelected -> {
+                        engine = event.engine
+                        emit(ReplyProgress.Started(convId, event.engine))
+                    }
+                    is AiRouter.StreamEvent.Restart -> {
+                        engine = event.engine
+                        accumulated.setLength(0)
+                        emit(ReplyProgress.Started(convId, event.engine))
+                    }
+                    is AiRouter.StreamEvent.Chunk -> {
+                        accumulated.append(event.chunk.text)
+                        persistAssistant()
+                        emit(ReplyProgress.Delta(accumulated.toString()))
+                    }
+                    is AiRouter.StreamEvent.Failed -> {
+                        debug.add("error", event.error.message)
+                        emit(ReplyProgress.Failed(event.error))
+                    }
                 }
-                is AiRouter.StreamEvent.Restart -> {
-                    engine = event.engine
-                    accumulated.setLength(0)
-                    emit(ReplyProgress.Started(convId, event.engine))
-                }
-                is AiRouter.StreamEvent.Chunk -> {
-                    accumulated.append(event.chunk.text)
-                    persistAssistant()
-                    emit(ReplyProgress.Delta(accumulated.toString()))
-                }
-                is AiRouter.StreamEvent.Failed -> {
-                    debug.add("error", event.error.message)
-                    emit(ReplyProgress.Failed(event.error))
-                }
+            }
+        }
+
+        runPass()
+
+        val reads = toolbox.requestedReads(accumulated.toString())
+        if (reads.isNotEmpty()) {
+            val fetched = runCatching { toolbox.fetchReads(reads, debug) }.getOrDefault("")
+            if (fetched.isNotBlank()) {
+                debug.add("fetched", fetched)
+                accumulated.setLength(0)
+                request = AiRequest(
+                    messages = trimmedHistory,
+                    system = system + "\n\nFETCHED DATA (you asked for this; answer from it now, " +
+                        "do not emit another [[get:]]):\n" + fetched,
+                )
+                runPass()
             }
         }
 

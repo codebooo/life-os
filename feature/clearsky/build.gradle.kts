@@ -6,6 +6,7 @@ plugins {
 
 dependencies {
     implementation(projects.core.common)
+    implementation(projects.core.service)
     implementation(projects.core.designsystem)
     implementation(projects.core.datastore)
     implementation(projects.core.ui)

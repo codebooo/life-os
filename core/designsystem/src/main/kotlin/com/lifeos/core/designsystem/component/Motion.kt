@@ -8,8 +8,6 @@ import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
@@ -21,17 +19,17 @@ import androidx.compose.ui.Modifier
  * Durations are deliberately short - the app should feel calm, not slow.
  */
 object LifeMotion {
-    /** Leaving the screen: fast, so nothing feels sticky. */
-    const val EXIT_MS = 130
+    /** Leaving the screen. */
+    const val EXIT_MS = 260
 
-    /** Arriving: still quick, but soft enough to read as a fade. */
-    const val ENTER_MS = 220
+    /** Arriving: long enough to read as a real fade, short enough to stay snappy. */
+    const val ENTER_MS = 420
 
     /** Cross-fading one piece of content for another. */
-    const val SWAP_MS = 240
+    const val SWAP_MS = 420
 
     /** Layout growing or shrinking. */
-    const val RESIZE_MS = 260
+    const val RESIZE_MS = 380
 
     fun <T> enterSpec() = tween<T>(durationMillis = ENTER_MS, easing = LinearOutSlowInEasing)
     fun <T> exitSpec() = tween<T>(durationMillis = EXIT_MS, easing = FastOutSlowInEasing)
@@ -66,8 +64,8 @@ fun FadeVisible(
     AnimatedVisibility(
         visible = visible,
         modifier = modifier,
-        enter = fadeIn(LifeMotion.enterSpec()) + scaleIn(LifeMotion.enterSpec(), initialScale = 0.97f),
-        exit = fadeOut(LifeMotion.exitSpec()) + scaleOut(LifeMotion.exitSpec(), targetScale = 0.97f),
+        enter = fadeIn(LifeMotion.enterSpec()),
+        exit = fadeOut(LifeMotion.exitSpec()),
         label = label,
         content = { content() },
     )
