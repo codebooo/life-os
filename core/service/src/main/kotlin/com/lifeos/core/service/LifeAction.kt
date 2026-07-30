@@ -134,4 +134,49 @@ sealed interface LifeAction {
         val macroName: String,
         override val source: SourceRef,
     ) : LifeAction
+
+    /** Writes an automation rule (§Module Triggers). */
+    data class CreateTriggerRule(
+        val name: String,
+        val triggerType: String,
+        val triggerArg: String,
+        val actionType: String,
+        val actionArg: String,
+        /** Comma-separated 1=Monday..7=Sunday; empty = every day. */
+        val days: String,
+        override val source: SourceRef,
+    ) : LifeAction
+
+    data class SetTriggerRuleEnabled(
+        val ruleName: String,
+        val enabled: Boolean,
+        override val source: SourceRef,
+    ) : LifeAction
+
+    data class RunTriggerRule(
+        val ruleName: String,
+        override val source: SourceRef,
+    ) : LifeAction
+
+    /** Backs the database up to the configured destination (§Module Sync). */
+    data class BackupNow(
+        override val source: SourceRef,
+    ) : LifeAction
+
+    /** Rebuilds the semantic index (§Module Recall). */
+    data class ReindexRecall(
+        override val source: SourceRef,
+    ) : LifeAction
+
+    /** Places time-sensitive tasks into free calendar slots (§Module Plan). */
+    data class PlanDay(
+        val dayOffset: Int,
+        override val source: SourceRef,
+    ) : LifeAction
+
+    /** Speaks text out loud through the offline voice (§Module Voice). */
+    data class Speak(
+        val text: String,
+        override val source: SourceRef,
+    ) : LifeAction
 }

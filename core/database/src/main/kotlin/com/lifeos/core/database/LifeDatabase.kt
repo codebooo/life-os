@@ -104,8 +104,14 @@ import com.lifeos.core.database.screentime.ScreenTimeDayEntity
         BrickAppLimitEntity::class,
         BrickSessionEntity::class,
         BrickUsageEntity::class,
+        com.lifeos.core.database.places.PlaceEntity::class,
+        com.lifeos.core.database.triggers.TriggerRuleEntity::class,
+        com.lifeos.core.database.triggers.TriggerFireEntity::class,
+        com.lifeos.core.database.signals.SignalEntity::class,
+        com.lifeos.core.database.recall.RecallChunkEntity::class,
+        com.lifeos.core.database.backup.BackupRunEntity::class,
     ],
-    version = 16,
+    version = 17,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -123,6 +129,7 @@ import com.lifeos.core.database.screentime.ScreenTimeDayEntity
         AutoMigration(from = 13, to = 14),
         AutoMigration(from = 14, to = 15),
         AutoMigration(from = 15, to = 16),
+        AutoMigration(from = 16, to = 17),
     ],
 )
 abstract class LifeDatabase : RoomDatabase() {
@@ -147,6 +154,16 @@ abstract class LifeDatabase : RoomDatabase() {
     abstract fun downloadDao(): DownloadDao
     abstract fun plantDao(): PlantDao
     abstract fun screenTimeDao(): ScreenTimeDao
+    abstract fun placeDao(): com.lifeos.core.database.places.PlaceDao
+
+    abstract fun triggerDao(): com.lifeos.core.database.triggers.TriggerDao
+
+    abstract fun signalDao(): com.lifeos.core.database.signals.SignalDao
+
+    abstract fun recallDao(): com.lifeos.core.database.recall.RecallDao
+
+    abstract fun backupDao(): com.lifeos.core.database.backup.BackupDao
+
     abstract fun brickDao(): BrickDao
 
     companion object {

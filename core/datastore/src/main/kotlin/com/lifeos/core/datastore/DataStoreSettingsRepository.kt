@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -125,6 +126,41 @@ internal class DataStoreSettingsRepository @Inject constructor(
         dataStore.edit { prefs -> prefs[KEY_PRIVATEBIN_INSTANCE] = url.trim() }
     }
 
+    override val backupPassphrase: Flow<String> =
+        dataStore.data.map { prefs -> prefs[KEY_BACKUP_PASSPHRASE] ?: "" }
+
+    override suspend fun setBackupPassphrase(value: String) {
+        dataStore.edit { prefs -> prefs[KEY_BACKUP_PASSPHRASE] = value }
+    }
+
+    override val backupWebdavUrl: Flow<String> =
+        dataStore.data.map { prefs -> prefs[KEY_BACKUP_WEBDAV_URL] ?: "" }
+
+    override suspend fun setBackupWebdavUrl(value: String) {
+        dataStore.edit { prefs -> prefs[KEY_BACKUP_WEBDAV_URL] = value.trim() }
+    }
+
+    override val backupWebdavUser: Flow<String> =
+        dataStore.data.map { prefs -> prefs[KEY_BACKUP_WEBDAV_USER] ?: "" }
+
+    override suspend fun setBackupWebdavUser(value: String) {
+        dataStore.edit { prefs -> prefs[KEY_BACKUP_WEBDAV_USER] = value.trim() }
+    }
+
+    override val backupWebdavPassword: Flow<String> =
+        dataStore.data.map { prefs -> prefs[KEY_BACKUP_WEBDAV_PASSWORD] ?: "" }
+
+    override suspend fun setBackupWebdavPassword(value: String) {
+        dataStore.edit { prefs -> prefs[KEY_BACKUP_WEBDAV_PASSWORD] = value }
+    }
+
+    override val backupKeepGenerations: Flow<Int> =
+        dataStore.data.map { prefs -> prefs[KEY_BACKUP_KEEP] ?: 5 }
+
+    override suspend fun setBackupKeepGenerations(value: Int) {
+        dataStore.edit { prefs -> prefs[KEY_BACKUP_KEEP] = value.coerceIn(1, 30) }
+    }
+
     override val clearSkyPlaces: Flow<String> =
         dataStore.data.map { prefs -> prefs[KEY_CLEAR_SKY_PLACES] ?: "" }
 
@@ -162,6 +198,11 @@ internal class DataStoreSettingsRepository @Inject constructor(
         val KEY_PASTEBIN_SHARE_DEFAULTS = stringPreferencesKey("pastebin_share_defaults")
         val KEY_PASTEBIN_USER_KEY = stringPreferencesKey("pastebin_user_key")
         val KEY_PRIVATEBIN_INSTANCE = stringPreferencesKey("privatebin_instance")
+        val KEY_BACKUP_PASSPHRASE = stringPreferencesKey("backup_passphrase")
+        val KEY_BACKUP_WEBDAV_URL = stringPreferencesKey("backup_webdav_url")
+        val KEY_BACKUP_WEBDAV_USER = stringPreferencesKey("backup_webdav_user")
+        val KEY_BACKUP_WEBDAV_PASSWORD = stringPreferencesKey("backup_webdav_password")
+        val KEY_BACKUP_KEEP = intPreferencesKey("backup_keep_generations")
         val KEY_CLEAR_SKY_PLACES = stringPreferencesKey("clear_sky_places")
         val KEY_CLEAR_SKY_LAST_PLACE = stringPreferencesKey("clear_sky_last_place")
     }

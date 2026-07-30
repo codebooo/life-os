@@ -85,6 +85,29 @@ interface SettingsRepository {
 
     suspend fun setPrivateBinInstance(url: String)
 
+    /** Passphrase the encrypted database backups are derived from. */
+    val backupPassphrase: Flow<String>
+
+    suspend fun setBackupPassphrase(value: String)
+
+    /** WebDAV collection snapshots are pushed to; empty = local only. */
+    val backupWebdavUrl: Flow<String>
+
+    suspend fun setBackupWebdavUrl(value: String)
+
+    val backupWebdavUser: Flow<String>
+
+    suspend fun setBackupWebdavUser(value: String)
+
+    val backupWebdavPassword: Flow<String>
+
+    suspend fun setBackupWebdavPassword(value: String)
+
+    /** How many local snapshots to keep. */
+    val backupKeepGenerations: Flow<Int>
+
+    suspend fun setBackupKeepGenerations(value: Int)
+
     /** Saved Clear Sky observing spots, one "name~lat~lon" per line. */
     val clearSkyPlaces: Flow<String>
 

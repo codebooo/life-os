@@ -12,11 +12,16 @@ import com.lifeos.core.ai.model.AiChunk
 import com.lifeos.core.ai.model.AiEngineId
 import com.lifeos.core.ai.model.AiRequest
 import com.lifeos.core.ai.model.AiRole
+import com.lifeos.core.ai.model.REPLACE_ALL
 import com.lifeos.core.common.coroutines.DispatcherProvider
 import com.lifeos.core.common.log.LifeLogger
 import com.lifeos.core.datastore.AiConfigRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.google.mediapipe.tasks.genai.llminference.ProgressListener
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.channels.ProducerScope
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -66,19 +71,22 @@ class GemmaEngine @Inject constructor(
      * error or timeout releases the model and surfaces a clean failure instead
      * of wedging — a hung inference can never brick the device again.
      */
-    override fun stream(request: AiRequest): Flow<AiChunk> = flow {
+    override fun stream(request: AiRequest): Flow<AiChunk> = channelFlow {
         val file = modelFile()
         check(file != null && file.exists()) { "No on-device model at ${file?.absolutePath}" }
 
         val images = request.messages.flatMap { it.imagePaths }.takeLast(MAX_IMAGES)
-        val text = mutex.withLock {
+        mutex.withLock {
             try {
                 withTimeout(GENERATE_TIMEOUT_MS) {
                     val inference = loadIfNeeded(file.absolutePath, withVision = images.isNotEmpty())
                     if (images.isEmpty()) {
-                        inference.generateResponse(buildPrompt(request))
+                        streamText(inference, buildPrompt(request))
                     } else {
-                        generateWithImages(inference, buildPrompt(request), images)
+                        // Vision goes through a session, which has no progress
+                        // callback; one chunk is the honest shape there.
+                        val text = generateWithImages(inference, buildPrompt(request), images)
+                        send(AiChunk(text = sanitize(text), done = true))
                     }
                 }
             } catch (t: Throwable) {
@@ -90,8 +98,37 @@ class GemmaEngine @Inject constructor(
                 throw t
             }
         }
-        emit(AiChunk(text = sanitize(text), done = true))
     }.flowOn(inferenceDispatcher)
+
+    /**
+     * Token streaming (§Module 9 v2). MediaPipe calls the progress listener with
+     * each new fragment, so the reply appears as it is decoded instead of after
+     * the whole thing is done — first-token latency replaces total latency as the
+     * felt cost. Partials are sanitized individually and the accumulated text is
+     * cleaned once at the end, because turn tokens can straddle two fragments.
+     */
+    private suspend fun ProducerScope<AiChunk>.streamText(inference: LlmInference, prompt: String) {
+        val accumulated = StringBuilder()
+        val finished = CompletableDeferred<Unit>()
+        val listener = ProgressListener<String> { partial, done ->
+            if (partial != null) {
+                accumulated.append(partial)
+                trySend(AiChunk(text = partial, done = false))
+            }
+            if (done) finished.complete(Unit)
+        }
+        val future = inference.generateResponseAsync(prompt, listener)
+        try {
+            finished.await()
+        } finally {
+            runCatching { future.get() }
+        }
+        // One last chunk carries the cleaned full text so callers that keep only
+        // the final value (and the sanitizer) still see a coherent answer.
+        val clean = sanitize(accumulated.toString())
+        send(AiChunk(text = REPLACE_ALL, done = false))
+        send(AiChunk(text = clean, done = true))
+    }
 
     /** Frees the model memory (called from onTrimMemory via the app). */
     suspend fun release() = mutex.withLock {

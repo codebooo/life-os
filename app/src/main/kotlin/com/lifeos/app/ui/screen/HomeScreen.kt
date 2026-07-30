@@ -24,7 +24,10 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.GridView
@@ -223,6 +226,24 @@ fun HomeScreen(
             description = "Create, share and manage pastes",
             icon = Icons.Filled.ContentPaste,
             destination = LifeDestination.Pastebin,
+        ),
+        AppGridItem(
+            label = "Triggers",
+            description = "When this happens, do that",
+            icon = Icons.Filled.Bolt,
+            destination = LifeDestination.Triggers,
+        ),
+        AppGridItem(
+            label = "Signals",
+            description = "What you missed, grouped",
+            icon = Icons.Filled.Notifications,
+            destination = LifeDestination.Signals,
+        ),
+        AppGridItem(
+            label = "Sync",
+            description = "Encrypted backups to your NAS",
+            icon = Icons.Filled.CloudUpload,
+            destination = LifeDestination.Sync,
         ),
         AppGridItem(
             label = "Clear Sky Map",

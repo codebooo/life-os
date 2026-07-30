@@ -28,11 +28,21 @@ data class AiRequest(
     val localOnly: Boolean = false,
 )
 
-/** One streamed increment of a completion. */
+/**
+ * One streamed increment of a completion.
+ *
+ * A chunk whose text equals [REPLACE_ALL] tells the consumer to clear what it
+ * has accumulated: the next chunk carries the whole cleaned answer. Streaming
+ * engines use it to hand over a sanitized final text without re-emitting every
+ * fragment.
+ */
 data class AiChunk(
     val text: String,
     val done: Boolean,
 )
+
+/** Sentinel chunk text: discard accumulated output, the next chunk replaces it. */
+const val REPLACE_ALL = "\u0000LIFEOS_REPLACE_ALL\u0000"
 
 data class AiCompletion(
     val text: String,
