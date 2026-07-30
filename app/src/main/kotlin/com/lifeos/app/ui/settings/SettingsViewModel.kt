@@ -131,7 +131,7 @@ class SettingsViewModel @Inject constructor(
         val DEFAULT_HOME_ORDER = listOf(
             "Notes", "Logger", "Packages", "Finance", "Scan", "Planner", "Books",
             "Routes", "Smart home", "NAS", "Clock", "Focus", "Memex", "Macros", "Evolution",
-            "Downloader", "Plants", "News", "Brick", "Screen Time", "Pastebin", "Clear Sky Map",
+            "Downloader", "Plants", "News", "Brick", "Screen Time", "Pastebin", "Clear Sky Map", "Triggers", "Signals", "Sync",
         )
     }
 }

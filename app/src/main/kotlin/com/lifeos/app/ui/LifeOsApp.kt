@@ -56,6 +56,9 @@ import com.lifeos.feature.vault.VaultRoute
 import com.lifeos.feature.screentime.ScreenTimeRoute
 import com.lifeos.feature.brick.BrickRoute
 import com.lifeos.feature.clearsky.ClearSkyRoute
+import com.lifeos.feature.signals.SignalsRoute
+import com.lifeos.feature.sync.SyncRoute
+import com.lifeos.feature.triggers.TriggersRoute
 import com.lifeos.feature.pastebin.PastebinRoute
 
 /**
@@ -194,6 +197,9 @@ fun LifeOsApp(captureRequests: Int = 0, navBarIds: List<String> = emptyList()) {
             composable<LifeDestination.Brick> { BrickRoute() }
             composable<LifeDestination.Pastebin> { PastebinRoute() }
             composable<LifeDestination.ClearSky> { ClearSkyRoute() }
+            composable<LifeDestination.Triggers> { TriggersRoute() }
+            composable<LifeDestination.Signals> { SignalsRoute() }
+            composable<LifeDestination.Sync> { SyncRoute() }
         }
     }
 

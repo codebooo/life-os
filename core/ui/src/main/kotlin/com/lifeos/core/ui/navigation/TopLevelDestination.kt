@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.AutoAwesomeMosaic
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Download
@@ -39,6 +41,8 @@ import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.AutoAwesomeMosaic
 import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.CloudUpload
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.ContentPaste
 import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.Download
@@ -121,4 +125,7 @@ enum class TopLevelDestination(
     SCREEN_TIME("Screen Time", Icons.Filled.Timelapse, Icons.Outlined.Timelapse, LifeDestination.ScreenTime),
     PASTEBIN("Pastebin", Icons.Filled.ContentPaste, Icons.Outlined.ContentPaste, LifeDestination.Pastebin),
     SKY("Clear Sky", Icons.Filled.NightsStay, Icons.Outlined.NightsStay, LifeDestination.ClearSky),
+    TRIGGERS("Triggers", Icons.Filled.Bolt, Icons.Outlined.Bolt, LifeDestination.Triggers),
+    SIGNALS("Signals", Icons.Filled.Notifications, Icons.Outlined.Notifications, LifeDestination.Signals),
+    SYNC("Sync", Icons.Filled.CloudUpload, Icons.Outlined.CloudUpload, LifeDestination.Sync),
 }

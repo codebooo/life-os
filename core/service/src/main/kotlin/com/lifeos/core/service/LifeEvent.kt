@@ -44,4 +44,22 @@ sealed interface LifeEvent {
         val title: String?,
         val text: String?,
     ) : LifeEvent
+
+    /** Arrived at a saved place (§Module Places). */
+    data class PlaceEntered(val placeId: Long, val name: String) : LifeEvent
+
+    /** Left a saved place. */
+    data class PlaceLeft(val placeId: Long, val name: String) : LifeEvent
+
+    /** A notification the Signals module captured, with its app label. */
+    data class SignalCaptured(
+        val signalId: Long,
+        val appPackage: String,
+        val appLabel: String,
+        val title: String,
+        val text: String,
+    ) : LifeEvent
+
+    /** Screen time for today crossed a threshold the rules care about. */
+    data class ScreenTimeCrossed(val minutesToday: Int) : LifeEvent
 }

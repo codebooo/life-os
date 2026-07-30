@@ -10,8 +10,8 @@ android {
 
     defaultConfig {
         applicationId = "com.lifeos"
-        versionCode = 22
-        versionName = "0.1.0-alpha.22"
+        versionCode = 23
+        versionName = "0.1.0-alpha.23"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -89,6 +89,13 @@ dependencies {
     implementation(projects.feature.brick)
     implementation(projects.feature.pastebin)
     implementation(projects.feature.clearsky)
+    implementation(projects.feature.triggers)
+    implementation(projects.feature.signals)
+    implementation(projects.feature.sync)
+    implementation(projects.core.places)
+    implementation(projects.core.recall)
+    implementation(projects.core.voice)
+
 
     implementation(projects.core.model)
     implementation(projects.core.network)
@@ -103,6 +110,8 @@ dependencies {
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.glance.appwidget)
+    implementation(libs.androidx.glance.material3)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.hilt.navigation.compose)

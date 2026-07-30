@@ -5,6 +5,7 @@ import com.lifeos.core.ai.model.AiChunk
 import com.lifeos.core.ai.model.AiCompletion
 import com.lifeos.core.ai.model.AiEngineId
 import com.lifeos.core.ai.model.AiRequest
+import com.lifeos.core.ai.model.REPLACE_ALL
 import com.lifeos.core.common.log.LifeLogger
 import com.lifeos.core.common.result.LifeError
 import com.lifeos.core.common.result.LifeResult
@@ -95,7 +96,10 @@ class AiRouter(
                     engine = event.engine
                     text.setLength(0)
                 }
-                is StreamEvent.Chunk -> text.append(event.chunk.text)
+                is StreamEvent.Chunk ->
+                    // Streaming engines finish with a sentinel plus the cleaned
+                    // text; keep only that so callers never see raw fragments.
+                    if (event.chunk.text == REPLACE_ALL) text.setLength(0) else text.append(event.chunk.text)
                 is StreamEvent.Failed -> error = event.error
             }
         }

@@ -107,4 +107,24 @@ internal object DatabaseModule {
 
     @Provides
     fun provideBrickDao(database: LifeDatabase): BrickDao = database.brickDao()
+
+    @Provides
+    fun providePlaceDao(database: LifeDatabase): com.lifeos.core.database.places.PlaceDao =
+        database.placeDao()
+
+    @Provides
+    fun provideTriggerDao(database: LifeDatabase): com.lifeos.core.database.triggers.TriggerDao =
+        database.triggerDao()
+
+    @Provides
+    fun provideSignalDao(database: LifeDatabase): com.lifeos.core.database.signals.SignalDao =
+        database.signalDao()
+
+    @Provides
+    fun provideRecallDao(database: LifeDatabase): com.lifeos.core.database.recall.RecallDao =
+        database.recallDao()
+
+    @Provides
+    fun provideBackupDao(database: LifeDatabase): com.lifeos.core.database.backup.BackupDao =
+        database.backupDao()
 }

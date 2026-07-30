@@ -97,6 +97,15 @@ sealed interface LifeDestination {
 
     @Serializable
     data object ClearSky : LifeDestination
+
+    @Serializable
+    data object Triggers : LifeDestination
+
+    @Serializable
+    data object Signals : LifeDestination
+
+    @Serializable
+    data object Sync : LifeDestination
 }
 
 const val DEEP_LINK_SCHEME = "lifeos"

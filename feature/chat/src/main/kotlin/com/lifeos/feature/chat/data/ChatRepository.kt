@@ -5,6 +5,7 @@ import com.lifeos.core.ai.model.AiEngineId
 import com.lifeos.core.ai.model.AiMessage
 import com.lifeos.core.ai.model.AiRequest
 import com.lifeos.core.ai.model.AiRole
+import com.lifeos.core.ai.model.REPLACE_ALL
 import com.lifeos.core.common.result.LifeError
 import com.lifeos.core.database.chat.AiConversationEntity
 import com.lifeos.core.database.chat.AiMessageEntity
@@ -136,9 +137,16 @@ internal class DefaultChatRepository @Inject constructor(
                         emit(ReplyProgress.Started(convId, event.engine))
                     }
                     is AiRouter.StreamEvent.Chunk -> {
-                        accumulated.append(event.chunk.text)
-                        persistAssistant()
-                        emit(ReplyProgress.Delta(accumulated.toString()))
+                        // Streaming engines end with a sentinel plus the cleaned
+                        // full text, so the visible reply never keeps raw
+                        // fragments (or a stray turn token split across two).
+                        if (event.chunk.text == REPLACE_ALL) {
+                            accumulated.setLength(0)
+                        } else {
+                            accumulated.append(event.chunk.text)
+                            persistAssistant()
+                            emit(ReplyProgress.Delta(accumulated.toString()))
+                        }
                     }
                     is AiRouter.StreamEvent.Failed -> {
                         debug.add("error", event.error.message)
@@ -150,19 +158,32 @@ internal class DefaultChatRepository @Inject constructor(
 
         runPass()
 
-        val reads = toolbox.requestedReads(accumulated.toString())
-        if (reads.isNotEmpty()) {
+        // Multi-hop tool use (§Module 9 v2): each pass may ask for one more
+        // module read, so "compare my screen time with my focus streak" works
+        // without either being in the always-on prompt. Bounded hard - a small
+        // model left to loop will happily ask forever.
+        var hop = 0
+        var fetchedSoFar = ""
+        while (hop < MAX_TOOL_HOPS) {
+            val reads = toolbox.requestedReads(accumulated.toString())
+            if (reads.isEmpty()) break
             val fetched = runCatching { toolbox.fetchReads(reads, debug) }.getOrDefault("")
-            if (fetched.isNotBlank()) {
-                debug.add("fetched", fetched)
-                accumulated.setLength(0)
-                request = AiRequest(
-                    messages = trimmedHistory,
-                    system = system + "\n\nFETCHED DATA (you asked for this; answer from it now, " +
-                        "do not emit another [[get:]]):\n" + fetched,
-                )
-                runPass()
-            }
+            if (fetched.isBlank()) break
+            fetchedSoFar = (fetchedSoFar + "\n\n" + fetched).trim()
+            debug.add("fetched", fetched)
+            accumulated.setLength(0)
+            val lastHop = hop == MAX_TOOL_HOPS - 1
+            request = AiRequest(
+                messages = trimmedHistory,
+                system = system + "\n\nFETCHED DATA (you asked for this):\n" + fetchedSoFar +
+                    if (lastHop) {
+                        "\nAnswer now from this data. Do not emit [[get:]] again."
+                    } else {
+                        "\nAnswer from this data, or ask for ONE more topic if you truly need it."
+                    },
+            )
+            runPass()
+            hop++
         }
 
         if (accumulated.isNotEmpty()) {
@@ -207,6 +228,8 @@ internal class DefaultChatRepository @Inject constructor(
     }
 
     private companion object {
+        /** One initial pass plus at most this many tool hops. */
+        const val MAX_TOOL_HOPS = 2
         const val ROLE_USER = "user"
         const val ROLE_ASSISTANT = "assistant"
         const val SYSTEM_PROMPT =

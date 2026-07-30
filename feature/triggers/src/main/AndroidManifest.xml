@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- Fires time-based rules; rearmed after every tick and on boot. -->
+        <receiver
+            android:name="com.lifeos.feature.triggers.data.TriggerAlarmReceiver"
+            android:exported="false" />
+    </application>
+
+</manifest>

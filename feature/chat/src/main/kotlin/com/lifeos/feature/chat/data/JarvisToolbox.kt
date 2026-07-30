@@ -73,6 +73,8 @@ class JarvisToolbox @Inject constructor(
         [[brick_on: mode name]] [[brick_off:]] [[focus: 25m]] [[focus_stop:]]
         [[sync_screen_time:]] [[export_screen_time: json|csv_days|csv_apps]]
         [[run_macro: name]]
+        [[rule: name | TRIGGER arg | ACTION arg]] [[rule_on: name]] [[rule_off: name]] [[run_rule: name]]
+        [[backup:]] [[reindex:]] [[plan_day: today|tomorrow]] [[say: text to speak]]
         To READ a module in detail, emit ONE line and stop; the answer comes back to you:
         [[get: topic]] or [[get: topic | query]] — topics: ${topicList()}
         Rules: use [[get:]] only when the answer needs data that is not already in LIVE DATA
@@ -384,6 +386,57 @@ class JarvisToolbox @Inject constructor(
         "run_macro" -> {
             dispatch(LifeAction.RunMacro(args.trim(), SOURCE))
             "Ran macro \"${args.trim()}\""
+        }
+
+        "rule" -> {
+            // "name | TRIGGER arg | ACTION arg" - the engine validates the types.
+            val parts = args.split('|').map { it.trim() }
+            if (parts.size < 3) error("need: name | TRIGGER arg | ACTION arg")
+            val trigger = parts[1].split(' ', limit = 2)
+            val actionSpec = parts[2].split(' ', limit = 2)
+            dispatch(
+                LifeAction.CreateTriggerRule(
+                    name = parts[0],
+                    triggerType = trigger.first(),
+                    triggerArg = trigger.getOrNull(1).orEmpty(),
+                    actionType = actionSpec.first(),
+                    actionArg = actionSpec.getOrNull(1).orEmpty(),
+                    days = parts.getOrNull(3).orEmpty(),
+                    source = SOURCE,
+                ),
+            )
+            "Rule \"${parts[0]}\" created"
+        }
+
+        "rule_on", "rule_off" -> {
+            dispatch(LifeAction.SetTriggerRuleEnabled(args.trim(), tool == "rule_on", SOURCE))
+            if (tool == "rule_on") "Rule \"${args.trim()}\" is on" else "Rule \"${args.trim()}\" is off"
+        }
+
+        "run_rule" -> {
+            dispatch(LifeAction.RunTriggerRule(args.trim(), SOURCE))
+            "Ran rule \"${args.trim()}\""
+        }
+
+        "backup" -> {
+            dispatch(LifeAction.BackupNow(SOURCE))
+            "Backup written and verified: ${echo.lastFileName ?: "done"}"
+        }
+
+        "reindex" -> {
+            dispatch(LifeAction.ReindexRecall(SOURCE))
+            "Recall index refreshed"
+        }
+
+        "plan_day" -> {
+            val offset = if (args.contains("tomorrow", ignoreCase = true)) 1 else 0
+            dispatch(LifeAction.PlanDay(offset, SOURCE))
+            if (offset == 0) "Today is planned" else "Tomorrow is planned"
+        }
+
+        "say" -> {
+            dispatch(LifeAction.Speak(args.trim(), SOURCE))
+            null
         }
 
         // Reads are handled before this point (they feed a second pass).

@@ -69,6 +69,40 @@
             </intent-filter>
         </activity>
 
+        <!-- Home-screen widget and quick-settings tiles (§Module Surfaces). -->
+        <receiver
+            android:name="com.lifeos.app.surfaces.NextUpWidgetReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/next_up_widget_info" />
+        </receiver>
+
+        <service
+            android:name="com.lifeos.app.surfaces.QuickCaptureTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="LifeOS capture"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name="com.lifeos.app.surfaces.FocusTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="Focus 25 min"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
     </application>
 
 </manifest>
