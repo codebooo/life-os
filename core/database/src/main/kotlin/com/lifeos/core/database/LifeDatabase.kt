@@ -110,8 +110,9 @@ import com.lifeos.core.database.screentime.ScreenTimeDayEntity
         com.lifeos.core.database.signals.SignalEntity::class,
         com.lifeos.core.database.recall.RecallChunkEntity::class,
         com.lifeos.core.database.backup.BackupRunEntity::class,
+        com.lifeos.core.database.calendar.CalendarListEntity::class,
     ],
-    version = 17,
+    version = 18,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -130,6 +131,7 @@ import com.lifeos.core.database.screentime.ScreenTimeDayEntity
         AutoMigration(from = 14, to = 15),
         AutoMigration(from = 15, to = 16),
         AutoMigration(from = 16, to = 17),
+        AutoMigration(from = 17, to = 18),
     ],
 )
 abstract class LifeDatabase : RoomDatabase() {

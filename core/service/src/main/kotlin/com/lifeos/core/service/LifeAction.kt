@@ -61,6 +61,40 @@ sealed interface LifeAction {
         val startsAt: Long,
         val endsAt: Long,
         override val source: SourceRef,
+        /** Calendar to file it under, matched loosely by name; blank = the default. */
+        val calendarName: String = "",
+        val location: String = "",
+        val notes: String = "",
+        /** Minutes-before alerts; empty = the calendar's usual single alert. */
+        val reminderMinutes: List<Int> = emptyList(),
+    ) : LifeAction
+
+    /** Adds a calendar (§Module 19); [colorName] is a palette name or #RRGGBB. */
+    data class CreateCalendar(
+        val name: String,
+        val colorName: String,
+        val makeDefault: Boolean,
+        override val source: SourceRef,
+    ) : LifeAction
+
+    /** Subscribes to a remote ICS feed and pulls it in straight away. */
+    data class SubscribeCalendar(
+        val name: String,
+        val url: String,
+        val colorName: String,
+        override val source: SourceRef,
+    ) : LifeAction
+
+    /** Refreshes every subscribed calendar now. */
+    data class SyncCalendars(
+        override val source: SourceRef,
+    ) : LifeAction
+
+    /** Drops the reminders another module created for one of its rows. */
+    data class CancelRemindersFor(
+        val module: String,
+        val entityId: Long,
+        override val source: SourceRef,
     ) : LifeAction
 
     // ---- Jarvis-facing actions (§Module 9) ---------------------------------

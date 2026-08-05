@@ -1,7 +1,9 @@
 package com.lifeos.feature.calendar.di
 
 import com.lifeos.core.service.LifeActionHandler
+import com.lifeos.core.service.LifeDataProvider
 import com.lifeos.feature.calendar.data.CalendarActionHandler
+import com.lifeos.feature.calendar.data.CalendarProvider
 import com.lifeos.feature.calendar.data.CalendarRepository
 import com.lifeos.feature.calendar.data.DefaultCalendarRepository
 import dagger.Binds
@@ -22,4 +24,8 @@ internal abstract class CalendarModule {
     @Binds
     @IntoSet
     abstract fun bindCalendarActionHandler(impl: CalendarActionHandler): LifeActionHandler
+
+    @Binds
+    @IntoSet
+    abstract fun bindCalendarProvider(impl: CalendarProvider): LifeDataProvider
 }

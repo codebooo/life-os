@@ -3,6 +3,10 @@ package com.lifeos.feature.clock
 import androidx.lifecycle.viewModelScope
 import com.lifeos.core.common.viewmodel.LifeViewModel
 import com.lifeos.core.datastore.SettingsRepository
+import com.lifeos.feature.clock.data.ClockTimerController
+import com.lifeos.feature.clock.data.ClockTimerState
+import com.lifeos.feature.clock.data.StopwatchController
+import com.lifeos.feature.clock.data.StopwatchState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -14,6 +18,9 @@ data class ClockUiState(
     val face: Int = 0,
     val worldClocks: List<String> = emptyList(),
     val zoneDraft: String = "",
+    /** Countdown and stopwatch live in singletons, so they survive tab switches. */
+    val timer: ClockTimerState = ClockTimerState(),
+    val stopwatch: StopwatchState = StopwatchState(),
     val message: String? = null,
 )
 
@@ -25,6 +32,18 @@ sealed interface ClockUiEvent {
     /** Map tap: nearest city's real zone (DST-correct), ocean falls back to UTC offset. */
     data class AddZoneFromMap(val latitude: Double, val longitude: Double) : ClockUiEvent
     data class RemoveZone(val zoneId: String) : ClockUiEvent
+
+    data class TimerHoursChanged(val value: Int) : ClockUiEvent
+    data class TimerMinutesChanged(val value: Int) : ClockUiEvent
+    data class TimerSecondsChanged(val value: Int) : ClockUiEvent
+    data class TimerPreset(val minutes: Int) : ClockUiEvent
+    data object TimerToggle : ClockUiEvent
+    data object TimerReset : ClockUiEvent
+
+    data object StopwatchToggle : ClockUiEvent
+    /** Running: record a lap. Paused: wipe the run. */
+    data object StopwatchLapOrReset : ClockUiEvent
+
     data object DismissMessage : ClockUiEvent
 }
 
@@ -33,6 +52,8 @@ sealed interface ClockUiEffect
 @HiltViewModel
 class ClockViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
+    private val timerController: ClockTimerController,
+    private val stopwatchController: StopwatchController,
 ) : LifeViewModel<ClockUiState, ClockUiEvent, ClockUiEffect>(ClockUiState()) {
 
     init {
@@ -40,6 +61,12 @@ class ClockViewModel @Inject constructor(
             settingsRepository.worldClocks.collect { zones ->
                 updateState { it.copy(worldClocks = zones) }
             }
+        }
+        viewModelScope.launch {
+            timerController.state.collect { timer -> updateState { it.copy(timer = timer) } }
+        }
+        viewModelScope.launch {
+            stopwatchController.state.collect { watch -> updateState { it.copy(stopwatch = watch) } }
         }
     }
 
@@ -89,6 +116,18 @@ class ClockViewModel @Inject constructor(
                 val current = settingsRepository.worldClocks.first()
                 settingsRepository.setWorldClocks(current - event.zoneId)
             }
+
+            is ClockUiEvent.TimerHoursChanged -> timerController.setHours(event.value)
+            is ClockUiEvent.TimerMinutesChanged -> timerController.setMinutes(event.value)
+            is ClockUiEvent.TimerSecondsChanged -> timerController.setSeconds(event.value)
+            is ClockUiEvent.TimerPreset -> timerController.setPresetMinutes(event.minutes)
+            ClockUiEvent.TimerToggle -> timerController.toggle()
+            ClockUiEvent.TimerReset -> timerController.reset()
+
+            ClockUiEvent.StopwatchToggle -> stopwatchController.toggle()
+            ClockUiEvent.StopwatchLapOrReset ->
+                if (uiState.value.stopwatch.running) stopwatchController.lap() else stopwatchController.reset()
+
             ClockUiEvent.DismissMessage -> updateState { it.copy(message = null) }
         }
     }

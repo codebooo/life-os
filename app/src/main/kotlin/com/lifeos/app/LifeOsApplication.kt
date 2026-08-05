@@ -6,8 +6,11 @@ import androidx.work.Configuration
 import com.lifeos.core.database.LifeDatabase
 import com.lifeos.core.places.PlaceEngine
 import com.lifeos.core.recall.RecallIndex
+import com.lifeos.feature.calendar.work.CalendarSubscriptionWorker
 import com.lifeos.feature.dhl.work.PackagePollWorker
+import com.lifeos.feature.screentime.work.ScreenTimeSyncWorker
 import com.lifeos.feature.sync.data.BackupService
+import com.lifeos.feature.sync.work.AutoBackupWorker
 import com.lifeos.feature.triggers.data.TriggerEngine
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +46,11 @@ class LifeOsApplication : Application(), Configuration.Provider {
         BackupService.applyStagedRestore(this, LifeDatabase.NAME)
         super.onCreate()
         PackagePollWorker.schedule(this)
+        // Usage stats age out of Android after ~a month, and backups are worth
+        // nothing if they only happen when someone remembers to open a screen.
+        ScreenTimeSyncWorker.schedule(this)
+        AutoBackupWorker.schedule(this)
+        CalendarSubscriptionWorker.schedule(this)
         // Rules and place matching are the two things that must run whether or
         // not their screens were ever opened.
         placeEngine.start()

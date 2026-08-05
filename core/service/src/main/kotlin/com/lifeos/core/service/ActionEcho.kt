@@ -29,4 +29,13 @@ class ActionEcho @Inject constructor() {
     fun fileName(value: String?) {
         lastFileName = value
     }
+
+    /** Free-text detail worth repeating verbatim, e.g. "12 events imported". */
+    @Volatile
+    var lastNote: String? = null
+        private set
+
+    fun text(value: String?) {
+        lastNote = value
+    }
 }

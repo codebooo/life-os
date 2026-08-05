@@ -45,8 +45,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -72,6 +70,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lifeos.core.designsystem.component.FadeThrough
 import com.lifeos.core.designsystem.component.EmptyState
+import com.lifeos.feature.clock.data.ClockTimerState
+import com.lifeos.feature.clock.data.StopwatchState
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -114,8 +114,8 @@ fun ClockRoute(viewModel: ClockViewModel = hiltViewModel()) {
                     1 -> WorldTab(uiState, viewModel::onEvent)
                     2 -> TimeZoneMapTab(viewModel::onEvent)
                     3 -> ConvertTab(uiState)
-                    4 -> StopwatchTab()
-                    else -> TimerTab()
+                    4 -> StopwatchTab(uiState.stopwatch, viewModel::onEvent)
+                    else -> TimerTab(uiState.timer, viewModel::onEvent)
                 }
             }
         }
@@ -412,17 +412,7 @@ internal fun friendlyZone(zoneId: String): String = when {
 }
 
 @Composable
-private fun StopwatchTab() {
-    var running by remember { mutableStateOf(false) }
-    var elapsedMs by remember { mutableLongStateOf(0L) }
-    val laps = remember { mutableStateOf(listOf<Long>()) }
-    LaunchedEffect(running) {
-        val startedAt = System.currentTimeMillis() - elapsedMs
-        while (running) {
-            elapsedMs = System.currentTimeMillis() - startedAt
-            delay(37)
-        }
-    }
+private fun StopwatchTab(state: StopwatchState, onEvent: (ClockUiEvent) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -430,27 +420,33 @@ private fun StopwatchTab() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Text(formatStopwatch(elapsedMs), style = MaterialTheme.typography.displayMedium, fontFamily = FontFamily.Monospace)
+        Text(
+            formatStopwatch(state.elapsedMs),
+            style = MaterialTheme.typography.displayMedium,
+            fontFamily = FontFamily.Monospace,
+        )
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Button(onClick = { running = !running }) { Text(if (running) "Pause" else "Start") }
+            Button(onClick = { onEvent(ClockUiEvent.StopwatchToggle) }) {
+                Text(if (state.running) "Pause" else "Start")
+            }
             OutlinedButton(
-                onClick = {
-                    // Running → record a lap; paused → reset everything.
-                    if (running) {
-                        laps.value = laps.value + elapsedMs
-                    } else {
-                        elapsedMs = 0
-                        laps.value = emptyList()
-                    }
-                },
-                enabled = running || elapsedMs > 0,
-            ) { Text(if (running) "Lap" else "Reset") }
+                onClick = { onEvent(ClockUiEvent.StopwatchLapOrReset) },
+                enabled = state.running || state.elapsedMs > 0,
+            ) { Text(if (state.running) "Lap" else "Reset") }
         }
-        if (laps.value.isNotEmpty()) {
+        if (state.running || state.elapsedMs > 0) {
+            Text(
+                "Counting in the notification shade too — it keeps going with the app closed.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+        if (state.laps.isNotEmpty()) {
             LazyColumn(modifier = Modifier.fillMaxWidth()) {
-                val entries = laps.value.mapIndexed { i, total ->
-                    val split = if (i == 0) total else total - laps.value[i - 1]
-                    Triple(laps.value.size - i, split, total)
+                val entries = state.laps.mapIndexed { i, total ->
+                    val split = if (i == 0) total else total - state.laps[i - 1]
+                    Triple(state.laps.size - i, split, total)
                 }.reversed()
                 items(entries) { (number, split, total) ->
                     ListItem(
@@ -474,25 +470,11 @@ private fun formatStopwatch(ms: Long): String {
 }
 
 @Composable
-private fun TimerTab() {
-    var hours by remember { mutableIntStateOf(0) }
-    var minutes by remember { mutableIntStateOf(5) }
-    var seconds by remember { mutableIntStateOf(0) }
-    var remainingSeconds by remember { mutableLongStateOf(0L) }
-    var running by remember { mutableStateOf(false) }
+private fun TimerTab(state: ClockTimerState, onEvent: (ClockUiEvent) -> Unit) {
     var showAsSeconds by remember { mutableStateOf(false) }
     // null = wheels; 0/1/2 = typing into hours/minutes/seconds.
     var typedField by remember { mutableStateOf<Int?>(null) }
 
-    LaunchedEffect(running) {
-        while (running && remainingSeconds > 0) {
-            delay(1_000)
-            remainingSeconds -= 1
-        }
-        if (remainingSeconds == 0L) running = false
-    }
-
-    val configured = hours * 3600L + minutes * 60L + seconds
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -503,84 +485,103 @@ private fun TimerTab() {
         // Countdown, typed entry and wheels all fade into one another.
         FadeThrough(
             targetState = when {
-                running || remainingSeconds > 0 -> 0
+                state.armed -> 0
                 typedField != null -> 1
                 else -> 2
             },
             label = "timer-mode",
         ) { mode ->
-        if (mode == 0) {
-            // Centered time; the display toggle sits below so nothing skews.
-            Text(
-                if (showAsSeconds) "${remainingSeconds}s" else formatCountdown(remainingSeconds),
-                style = MaterialTheme.typography.displayLarge,
-                fontFamily = FontFamily.Monospace,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedButton(onClick = { showAsSeconds = !showAsSeconds }) {
-                Icon(Icons.Filled.SwapHoriz, contentDescription = null)
-                Text(if (showAsSeconds) "  Show mm:ss" else "  Show seconds")
+            // Each mode owns a Column of its own: the fade container stacks its
+            // children, so a bare Text + Button pair would sit on top of one another.
+            when (mode) {
+                0 -> Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        if (showAsSeconds) {
+                            "${state.remainingSeconds}s"
+                        } else {
+                            formatCountdown(state.remainingSeconds)
+                        },
+                        style = MaterialTheme.typography.displayLarge,
+                        fontFamily = FontFamily.Monospace,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedButton(onClick = { showAsSeconds = !showAsSeconds }) {
+                        Icon(Icons.Filled.SwapHoriz, contentDescription = null)
+                        Text(if (showAsSeconds) "  Show mm:ss" else "  Show seconds")
+                    }
+                }
+
+                1 -> TypedDuration(
+                    hours = state.hours,
+                    minutes = state.minutes,
+                    seconds = state.seconds,
+                    startField = typedField ?: 0,
+                    onHours = { onEvent(ClockUiEvent.TimerHoursChanged(it)) },
+                    onMinutes = { onEvent(ClockUiEvent.TimerMinutesChanged(it)) },
+                    onSeconds = { onEvent(ClockUiEvent.TimerSecondsChanged(it)) },
+                    onDone = { typedField = null },
+                )
+
+                else -> Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    // Samsung-style three infinite wheels; tap one to type instead.
+                    WheelPicker(
+                        range = 0..99,
+                        value = state.hours,
+                        onValue = { onEvent(ClockUiEvent.TimerHoursChanged(it)) },
+                        onTap = { typedField = 0 },
+                    )
+                    WheelLabel("h")
+                    WheelPicker(
+                        range = 0..59,
+                        value = state.minutes,
+                        onValue = { onEvent(ClockUiEvent.TimerMinutesChanged(it)) },
+                        onTap = { typedField = 1 },
+                    )
+                    WheelLabel("m")
+                    WheelPicker(
+                        range = 0..59,
+                        value = state.seconds,
+                        onValue = { onEvent(ClockUiEvent.TimerSecondsChanged(it)) },
+                        onTap = { typedField = 2 },
+                    )
+                    WheelLabel("s")
+                }
             }
-        } else if (mode == 1) {
-            // Typed entry: number keyboard, auto-advancing to the next field.
-            TypedDuration(
-                hours = hours,
-                minutes = minutes,
-                seconds = seconds,
-                startField = typedField ?: 0,
-                onHours = { hours = it },
-                onMinutes = { minutes = it },
-                onSeconds = { seconds = it },
-                onDone = { typedField = null },
-            )
-        } else {
-            // Samsung-style three infinite wheels; tap one to type instead.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                WheelPicker(range = 0..99, value = hours, onValue = { hours = it }, onTap = { typedField = 0 })
-                WheelLabel("h")
-                WheelPicker(range = 0..59, value = minutes, onValue = { minutes = it }, onTap = { typedField = 1 })
-                WheelLabel("m")
-                WheelPicker(range = 0..59, value = seconds, onValue = { seconds = it }, onTap = { typedField = 2 })
-                WheelLabel("s")
-            }
-        }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(1L, 5L, 10L, 25L).forEach { m ->
+            listOf(1, 5, 10, 25).forEach { m ->
                 FilterChip(
-                    selected = !running && remainingSeconds == 0L && configured == m * 60,
-                    onClick = {
-                        hours = 0; minutes = m.toInt(); seconds = 0
-                        remainingSeconds = 0
-                        running = false
-                    },
+                    selected = !state.armed && state.configuredSeconds == m * 60L,
+                    onClick = { onEvent(ClockUiEvent.TimerPreset(m)) },
                     label = { Text("${m}m") },
                 )
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Button(
-                onClick = {
-                    if (running) {
-                        running = false
-                    } else {
-                        if (remainingSeconds == 0L) remainingSeconds = configured
-                        if (remainingSeconds > 0) running = true
-                    }
-                },
-                enabled = running || remainingSeconds > 0 || configured > 0,
-            ) { Text(if (running) "Pause" else "Start") }
+                onClick = { onEvent(ClockUiEvent.TimerToggle) },
+                enabled = state.armed || state.configuredSeconds > 0,
+            ) { Text(if (state.running) "Pause" else "Start") }
             OutlinedButton(
-                onClick = {
-                    running = false
-                    remainingSeconds = 0
-                },
-                enabled = running || remainingSeconds > 0,
+                onClick = { onEvent(ClockUiEvent.TimerReset) },
+                enabled = state.armed,
             ) { Text("Reset") }
+        }
+        if (state.armed) {
+            Text(
+                "Running in the background with a notification you can pause from.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
         }
     }
 }
