@@ -7,7 +7,7 @@ or on your own NAS (Ollama). No third-party cloud, ever.
 **Spec:** [`docs/PRODUCTION_PLAN.md`](docs/PRODUCTION_PLAN.md). Every module
 and rule traces back to a section (and often a community demand source) there.
 
-## Status — v0.1.0-alpha.18
+## Status — v0.1.0-alpha.24
 
 | Area | State |
 |---|---|
@@ -73,6 +73,12 @@ and rule traces back to a section (and often a community demand source) there.
 | Plan: auto-schedules due tasks into real calendar gaps inside working hours as ordinary, movable events; Jarvis plans today or tomorrow on request | Done |
 | Surfaces: a "Next up" Glance home-screen widget plus quick-settings tiles for capture and a 25-minute focus block | Done |
 | Voice: replies can be spoken through the device's on-device speech engine, and any module (or Jarvis) can say something with a Speak action | Done |
+| Calendar v3: many calendars, each with its own colour (12 swatches or any hex), one marked default, individually hidden from a colour key across the top; events are drawn in their calendar's colour and choose their calendar when saved. Pinch-to-zoom works in week and day view (the gesture is claimed on the initial pass before the scroll and the columns see it, and reads the live hour height). Swiping or the arrows slide the period in from the side it came from, in month, week, day and the new Agenda list. Proton-style stacked alerts (at start, 5/10/15/30/60/120 min, 1/2 days, a week, or a typed value) replace the single 30-minute toggle, and editing an event drops its old alarms. Locations autocomplete through OpenStreetMap Nominatim. Clashing events sit side by side instead of hiding each other, the timeline opens on the current hour, the title bar jumps to any date, and there is event search and duplicate | Done |
+| Calendar subscriptions: any ICS or webcal link (holidays, a shared work calendar) becomes a read-only coloured calendar, keyed by ICS UID so refreshes update instead of duplicating, wiped-and-rewritten each pull so upstream cancellations disappear, refreshed on open and every six hours by a worker. The ICS codec now reads UID, all-day dates and VALARM offsets, and writes them back | Done |
+| Jarvis gains calendar tools: `[[event_full: when \| title \| calendar \| alert minutes \| location]]`, `[[calendar_new:]]`, `[[calendar_subscribe:]]`, `[[calendar_sync:]]`, and a calendar provider that reads out your calendars, their colours, defaults, subscription state and what is coming up | Done |
+| Running timers show up in the notification shade: Clock's timer and stopwatch and the Focus timer all post an ongoing notification with Pause/Resume and Reset buttons. The number is drawn by the system's own chronometer from an absolute instant, so it stays correct with no per-second updates and keeps counting while the app is away. Clock's timer and stopwatch moved into singletons, so they no longer reset when you leave the tab | Done |
+| Clock timer fix: the "Show seconds" button no longer sits on top of the countdown - the fade container stacks its children, so each mode now owns a column of its own | Done |
+| Screen time never goes stale: a worker re-derives the last 45 days every four hours whether or not the module is opened (Android purges raw usage after about a month), and a daily worker takes an encrypted database backup on its own once a passphrase is set | Done |
 | Deferred post-alpha: Glance home-screen widgets, HA WebSocket live state/zones, Vault unlock UI, first-run onboarding checklist (grants live in Settings → System access), FinTS bank sync | Planned |
 
 **Google-free by design:** no Google service is ever called at runtime (no Play Services, no Google recognizer, no Google Maps). Remaining Google-*authored* open-source, fully on-device libraries: AndroidX/Jetpack (unavoidable on Android), MediaPipe (Gemma inference), ML Kit on-device OCR/barcode (no network) — swap candidates documented in the plan.
@@ -82,7 +88,7 @@ and rule traces back to a section (and often a community demand source) there.
 Grab `lifeos-v*.apk` from [Releases](../../releases), then:
 
 ```
-adb install -r -g lifeos-v0.1.0-alpha.18.apk
+adb install -r -g lifeos-v0.1.0-alpha.24.apk
 ```
 
 or copy to the phone and allow *Install unknown apps*. Android 13+ (minSdk 33).

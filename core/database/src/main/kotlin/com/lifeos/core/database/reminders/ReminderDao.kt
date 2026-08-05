@@ -32,4 +32,8 @@ interface ReminderDao {
 
     @Query("DELETE FROM reminders WHERE id = :id")
     suspend fun delete(id: Long)
+
+    /** Every reminder another module created for one of its rows. */
+    @Query("SELECT * FROM reminders WHERE sourceModule = :module AND sourceEntityId = :entityId")
+    suspend fun bySource(module: String, entityId: Long): List<ReminderEntity>
 }

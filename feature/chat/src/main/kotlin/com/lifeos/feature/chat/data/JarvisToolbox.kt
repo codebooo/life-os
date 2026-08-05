@@ -67,6 +67,9 @@ class JarvisToolbox @Inject constructor(
         [[add_task: title]] [[done_task: id]] [[delete_task: id]]
         [[timer: 5m]] [[remind: 18:00 | title]] [[remind: +25m | title]] [[cancel_reminder: id]]
         [[event: tomorrow 15:00 | title]] [[note: title | body]]
+        [[event_full: tomorrow 15:00 | title | calendar | 10,60 (alert minutes) | location]]
+        [[calendar_new: name | colour or #hex]] [[calendar_subscribe: name | ics url]]
+        [[calendar_sync:]]
         [[edit_note: title | new full body]] [[append_note: title | text to add]]
         [[paste: title | text]] [[burner_paste: title | text]] (burner = one-time, encrypted)
         [[download: url]] [[water_plant: name]] [[add_plant: name | species | every N days]]
@@ -293,6 +296,63 @@ class JarvisToolbox @Inject constructor(
             val at = parseWhen(whenPart) ?: error("bad time \"$whenPart\"")
             dispatcher.dispatch(LifeAction.CreateCalendarEvent(title.ifBlank { "Event" }, at, at + 3_600_000L, SOURCE))
             "Event ${AT.format(Date(at))}: $title"
+        }
+        "event_full" -> {
+            // when | title | calendar | alert minutes | location
+            val parts = args.split('|').map { it.trim() }
+            val at = parseWhen(parts.getOrElse(0) { "" }) ?: error("bad time")
+            val title = parts.getOrElse(1) { "" }.ifBlank { "Event" }
+            val calendarName = parts.getOrElse(2) { "" }
+            val alerts = parts.getOrElse(3) { "" }
+                .split(',', ' ')
+                .mapNotNull { it.trim().toIntOrNull() }
+            val location = parts.getOrElse(4) { "" }
+            dispatch(
+                LifeAction.CreateCalendarEvent(
+                    title = title,
+                    startsAt = at,
+                    endsAt = at + 3_600_000L,
+                    source = SOURCE,
+                    calendarName = calendarName,
+                    location = location,
+                    reminderMinutes = alerts,
+                ),
+            )
+            buildString {
+                append("Event ${AT.format(Date(at))}: $title")
+                if (calendarName.isNotBlank()) append(" in $calendarName")
+                if (alerts.isNotEmpty()) append(", alerts ${alerts.joinToString("/")}m before")
+            }
+        }
+        "calendar_new" -> {
+            val (name, colour) = splitArgs(args)
+            if (name.isBlank()) error("name the calendar")
+            dispatch(
+                LifeAction.CreateCalendar(
+                    name = name,
+                    colorName = colour,
+                    makeDefault = false,
+                    source = SOURCE,
+                ),
+            )
+            echo.lastNote ?: "Calendar \"$name\" created"
+        }
+        "calendar_subscribe" -> {
+            val (name, url) = splitArgs(args)
+            if (!url.contains("://")) error("need an ics or webcal link")
+            dispatch(
+                LifeAction.SubscribeCalendar(
+                    name = name.ifBlank { "Subscribed calendar" },
+                    url = url,
+                    colorName = "",
+                    source = SOURCE,
+                ),
+            )
+            echo.lastNote ?: "Subscribed to $name"
+        }
+        "calendar_sync" -> {
+            dispatch(LifeAction.SyncCalendars(SOURCE))
+            echo.lastNote ?: "Subscriptions refreshed"
         }
         "note" -> {
             val (title, body) = splitArgs(args)

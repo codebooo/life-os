@@ -20,6 +20,16 @@
                 android:value="Cross-module coordination hub: event bus, rules engine, and scheduler for on-device automation (§1.4)" />
         </service>
 
+        <!-- Pause/Reset buttons on the running-timer notifications. -->
+        <receiver
+            android:name="com.lifeos.core.service.TimerCommandReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.lifeos.action.TIMER_COMMAND" />
+            </intent-filter>
+        </receiver>
+
         <receiver
             android:name="com.lifeos.core.service.BootReceiver"
             android:enabled="true"

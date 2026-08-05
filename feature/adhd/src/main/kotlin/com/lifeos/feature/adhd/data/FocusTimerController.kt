@@ -6,6 +6,10 @@ import android.os.VibrationEffect
 import android.os.VibratorManager
 import com.lifeos.core.database.adhd.FocusDao
 import com.lifeos.core.database.adhd.FocusSessionEntity
+import com.lifeos.core.service.TimerCommand
+import com.lifeos.core.service.TimerCommandBus
+import com.lifeos.core.service.TimerKind
+import com.lifeos.core.service.TimerNotifier
 import com.lifeos.feature.adhd.overlay.TimerOverlayState
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -39,6 +43,7 @@ data class FocusTimerState(
 class FocusTimerController @Inject constructor(
     @ApplicationContext private val context: Context,
     private val focusDao: FocusDao,
+    private val notifier: TimerNotifier,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -58,6 +63,16 @@ class FocusTimerController @Inject constructor(
                 _state.value = _state.value.copy(overlayVisible = visible)
             }
         }
+        // The ongoing notification's own buttons.
+        scope.launch {
+            TimerCommandBus.commands.collect { (kind, command) ->
+                if (kind != TimerKind.FOCUS_TIMER) return@collect
+                when (command) {
+                    TimerCommand.TOGGLE -> toggle()
+                    TimerCommand.RESET -> reset()
+                }
+            }
+        }
     }
 
     fun setTotal(seconds: Int) {
@@ -65,6 +80,7 @@ class FocusTimerController @Inject constructor(
         stopTicker()
         deadlineElapsed = 0L
         _state.value = _state.value.copy(totalSeconds = total, remainingSeconds = total, running = false)
+        notifier.cancel(TimerKind.FOCUS_TIMER)
         pushOverlay()
     }
 
@@ -77,6 +93,12 @@ class FocusTimerController @Inject constructor(
         if (current.remainingSeconds <= 0 || current.running) return
         deadlineElapsed = SystemClock.elapsedRealtime() + current.remainingSeconds * 1000L
         _state.value = current.copy(running = true)
+        notifier.countdown(
+            TimerKind.FOCUS_TIMER,
+            "Focus",
+            current.remainingSeconds * 1000L,
+            running = true,
+        )
         pushOverlay()
         startTicker()
     }
@@ -84,8 +106,10 @@ class FocusTimerController @Inject constructor(
     fun pause() {
         if (!_state.value.running) return
         stopTicker()
-        _state.value = _state.value.copy(running = false, remainingSeconds = remainingFromDeadline())
+        val left = remainingFromDeadline()
+        _state.value = _state.value.copy(running = false, remainingSeconds = left)
         deadlineElapsed = 0L
+        notifier.countdown(TimerKind.FOCUS_TIMER, "Focus", left * 1000L, running = false)
         pushOverlay()
     }
 
@@ -97,6 +121,7 @@ class FocusTimerController @Inject constructor(
         deadlineElapsed = 0L
         _state.value = current.copy(running = false, remainingSeconds = current.totalSeconds)
         if (ran) recordSession(current.totalSeconds / 60, completed = false)
+        notifier.cancel(TimerKind.FOCUS_TIMER)
         pushOverlay()
     }
 
@@ -130,6 +155,7 @@ class FocusTimerController @Inject constructor(
         deadlineElapsed = 0L
         _state.value = _state.value.copy(running = false, remainingSeconds = 0)
         recordSession(total / 60, completed = true)
+        notifier.finished(TimerKind.FOCUS_TIMER, "Focus block done")
         TimerOverlayState.hide(context)
         _state.value = _state.value.copy(overlayVisible = false, remainingSeconds = total)
         runCatching {
